@@ -1,0 +1,4 @@
+DEFAULT_RPC = "https://rpc-new.pila.vn"
+DEFAULT_CHAIN_ID = 704
+DEFAULT_DID_SMC_ADDRESS = "0x75e7b09a24bce5a921babe27b62ec7bfe2230d6a"
+DEFAULT_METHOD = "did:nda"

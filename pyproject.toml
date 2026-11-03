@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pila-credential-sdk"
+version = "0.1.0"
+description = "Python port of pilacorp go-credential-sdk (DID v2, VM ops, VC helpers)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+  "pycryptodome>=3.20.0",
+  "eth-keys>=0.5.0",
+  "cryptography>=42.0.0",
+  "eth-abi>=5.1.0",
+  "eth-account>=0.13.0",
+  "eth-utils>=5.0.0",
+  "pyld>=2.0.4",
+  "cbor2>=5.6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0.0"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+did = ["blockchain/did-contract/*.json"]
+didv2 = ["didcontract/*.json"]
+credential = ["common/processor/*.json", "vccontract/smartcontract/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
