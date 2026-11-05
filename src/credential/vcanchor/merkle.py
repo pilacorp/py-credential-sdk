@@ -1,3 +1,5 @@
+import hmac
+
 from didv2.keccak import keccak256
 
 
@@ -44,7 +46,7 @@ def verify_proof(leaf: bytes, proof: list[bytes], root: bytes) -> bool:
     current = leaf
     for sibling in proof:
         current = merge_sorted(current, sibling)
-    return current == root
+    return hmac.compare_digest(current, root)
 
 
 def merge_sorted(left: bytes, right: bytes) -> bytes:

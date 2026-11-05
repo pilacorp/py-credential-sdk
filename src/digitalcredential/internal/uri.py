@@ -48,10 +48,10 @@ def valid(s: str) -> bool:
 
 
 def _is_scheme(s: str) -> bool:
-    if not s or not s[0].isalpha():
+    if not s or not _alpha(s[0]):
         return False
     for c in s[1:]:
-        if not (c.isalnum() or c in "+-."):
+        if not (_alpha(c) or _digit(c) or c in "+-."):
             return False
     return True
 
@@ -76,7 +76,7 @@ def _is_authority(s: str) -> bool:
             port = after[1:]
     else:
         host, _, port = s.partition(":")
-    if port and not all(c.isdigit() for c in port):
+    if not all(_digit(c) for c in port):
         return False
     if host and any(ord(c) >= 0x80 for c in host):
         return False
@@ -84,7 +84,7 @@ def _is_authority(s: str) -> bool:
 
 
 def _is_ip_literal(s: str) -> bool:
-    if s and s[0].lower() == "v":
+    if s and s[0] in "vV":
         rest = s[1:]
         if "." not in rest:
             return False
@@ -108,15 +108,23 @@ def _uri_chars(s: str, extra: str) -> bool:
                 return False
             i += 3
             continue
-        if c.isalnum() or c in "-._~!$&'()*+,;=" or c in extra:
+        if _alpha(c) or _digit(c) or c in "-._~!$&'()*+,;=" or c in extra:
             i += 1
             continue
         return False
     return True
 
 
+def _alpha(c: str) -> bool:
+    return "a" <= c <= "z" or "A" <= c <= "Z"
+
+
+def _digit(c: str) -> bool:
+    return "0" <= c <= "9"
+
+
 def _is_hex(c: str) -> bool:
-    return c.isdigit() or ("a" <= c.lower() <= "f")
+    return _digit(c) or "a" <= c <= "f" or "A" <= c <= "F"
 
 
 def _ascii_or_pct(s: str) -> bool:

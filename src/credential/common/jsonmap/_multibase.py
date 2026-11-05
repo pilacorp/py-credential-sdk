@@ -22,7 +22,7 @@ def b58decode(s: str) -> bytes:
     num = 0
     for ch in s.encode("ascii"):
         num = num * 58 + _B58_ALPHABET.index(ch)
-    out = num.to_bytes((num.bit_length() + 7) // 8 or 1, "big")
+    out = num.to_bytes((num.bit_length() + 7) // 8, "big")
     pad = 0
     for ch in s:
         if ch == "1":

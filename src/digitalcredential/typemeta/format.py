@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
 from typing import Any
-from urllib.parse import urlparse
 
 from digitalcredential.internal import jsonint, sri, uri
 from digitalcredential.internal.safehttp import https_url
+from jose import json as jose_json
+from jose.json import JsonNumber
 from digitalcredential.typemeta.color import rgb_color
 from digitalcredential.typemeta.document import (
     Claim,
@@ -61,8 +61,8 @@ def read_document(raw: bytes) -> _Document:
     if len(raw) > MAX_DOCUMENT_BYTES:
         raise _invalid(f"the document is over {MAX_DOCUMENT_BYTES} bytes, the SDK's limit")
     try:
-        obj = json.loads(raw)
-    except json.JSONDecodeError as exc:
+        obj = jose_json.decode_json(raw)
+    except Exception as exc:  # jose.ErrMalformed: duplicate keys, bad UTF-8, depth, trailing data
         raise ErrInvalid(f"typemeta: {exc}") from exc
     if not isinstance(obj, dict):
         raise _invalid("the document is not a JSON object (draft-ietf-oauth-sd-jwt-vc-19 §5.2)")
@@ -236,10 +236,17 @@ def _read_uri(m: dict[str, Any], at: str) -> str:
     s = m.get("uri")
     if not isinstance(s, str):
         raise _invalid(f"{at}.uri is absent or not a string (draft-ietf-oauth-sd-jwt-vc-19 §5.5.1)")
-    if uri.valid(s) and https_url(s):
-        return s
-    if s.startswith("data:") and "," in s:
-        return s
+    # url.Parse accepts more than RFC 3986, such as a host in Unicode; uri.valid does not.
+    if uri.valid(s):
+        if https_url(s):
+            return s
+        # RFC 2397 §3: data:[<mediatype>][;base64],<data>; the comma is required, and data is *uric
+        # (EID 2045). url.Parse puts it in Opaque: what follows "data:" up to "?" or "#", when it does
+        # not start with "/".
+        scheme, _, rest = s.partition(":")
+        opaque = rest.partition("#")[0].partition("?")[0]
+        if scheme.lower() == "data" and not rest.startswith("/") and "," in opaque:
+            return s
     raise _invalid(f"{at}.uri is neither an https URL with a host nor a data: URI")
 
 
@@ -276,11 +283,15 @@ def _read_claim(v: Any, at: str) -> _ClaimMeta:
     for i, el in enumerate(path):
         if isinstance(el, str) or el is None:
             norm_path.append(el)
-        elif isinstance(el, (int, float)):
+        elif isinstance(el, JsonNumber):
+            # A non-negative integer is a value (RFC 8259 §6): 1, 1.0 and 1e0 select the same element.
             try:
-                norm_path.append(jsonint.non_negative(el))
+                norm_path.append(jsonint.non_negative(str(el)))
             except ValueError as exc:
-                raise _claims_err(f"{at}.path[{i}] is not a non-negative integer") from exc
+                raise _claims_err(
+                    f"{at}.path[{i}] is a number that is not a non-negative integer an int holds "
+                    "(draft-ietf-oauth-sd-jwt-vc-19 §5.6.1)"
+                ) from exc
         else:
             raise _claims_err(f"{at}.path[{i}] is not a string, null or a non-negative integer")
     c = Claim(path=norm_path)
@@ -328,7 +339,7 @@ def _read_claim(v: Any, at: str) -> _ClaimMeta:
 
 
 def _svg_id(s: str) -> bool:
-    if not s or s[0].isdigit():
+    if not s or "0" <= s[0] <= "9":
         return False
     allowed = set("_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
     return all(c in allowed for c in s)

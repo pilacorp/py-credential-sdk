@@ -11,3 +11,4 @@ venv/
 .nda-harness/tasks/
 .nda-harness/skill-selection/
 .DS_Store
+interop/

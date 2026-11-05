@@ -4,7 +4,7 @@ import re
 from typing import Any
 
 from didv2.did.verification_method_ops import find_verification_method
-from didv2.did.did import hash_did_document
+from didv2.did.did import hash_did_document, validate_did_document
 from didv2.ethereum import address_from_public_key_hex
 
 SUB_ID_RE = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
@@ -41,6 +41,10 @@ def sub_did_for(root_did: str, public_key_hex: str) -> str:
 def validate_sub_did(doc: dict[str, Any], root_did: str) -> None:
     if not doc:
         raise ValueError("subdid: document is nil")
+    try:
+        validate_did_document(doc)
+    except ValueError as exc:
+        raise ValueError(f"subdid: {exc}") from exc
     check_did(doc["id"])
     check_did(root_did)
     if did_prefix(doc["id"]) != did_prefix(root_did):

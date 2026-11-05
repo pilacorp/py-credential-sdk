@@ -13,7 +13,7 @@ from didv2.subdid.signature import (
     verify_root_consent,
 )
 from didv2.model import did_type_string
-from didv2.hexutil import with_0x
+from didv2.hexutil import hex_to_bytes, with_0x
 
 
 def generate_sub_did(
@@ -24,15 +24,24 @@ def generate_sub_did(
     metadata: dict[str, Any] | None,
     root_signer: DefaultProvider,
     sub_signer: DefaultProvider,
+    extra_vms: list[Any] | None = None,
 ) -> dict[str, Any]:
+    if root_signer is None or sub_signer is None:
+        raise ValueError("subdid: root signer and Sub-DID signer are required")
     if did_type_string(did_type) == "unknown":
         raise ValueError(f"subdid: unknown DID type {did_type}")
     parse_sub_id(sub_id)
+    try:
+        raw = hex_to_bytes(sub_public_key_hex)
+    except ValueError as exc:
+        raise ValueError(f"subdid: Sub-DID public key: {exc}") from exc
+    if len(raw) != 33 or raw[0] not in (2, 3):  # Go crypto.DecompressPubkey: compressed points only
+        raise ValueError("subdid: Sub-DID public key: invalid public key")
     sub_did = sub_did_for(root_did, sub_public_key_hex)
     consent = sign_root_consent(sub_did, root_signer)
     meta = dict(metadata or {})
     meta["subId"] = sub_id
-    doc = generate_did_document(sub_public_key_hex, sub_did, "", root_did, did_type, meta)
+    doc = generate_did_document(sub_public_key_hex, sub_did, "", root_did, did_type, meta, extra_vms)
     set_root_consent(doc, consent)
     validate_sub_did(doc, root_did)
     try:

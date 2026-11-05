@@ -102,9 +102,19 @@ def add_suite_context_without_changing_meaning(m: dict[str, Any]) -> None:
 
     if defines_secp256k1_suite(m):
         return
-    before = document_digest(m)
+    try:
+        before = document_digest(m)
+    except ValueError as exc:
+        raise ValueError(f"failed to canonicalize the document: {exc}") from exc
     ensure_secp256k1_suite_context(m)
-    after = document_digest(m)
+    try:
+        after = document_digest(m)
+    except ValueError as exc:
+        raise ValueError(
+            f"adding {SECP256K1_SUITE_CONTEXT_NARROW!r}, which {ECDSA_SECP256K1_SIGNATURE_2019} needs, stopped the "
+            "document from canonicalizing; a term it defines collides with one this document uses — rename that "
+            f"term, or define the suite in @context yourself: {exc}"
+        ) from exc
     if before != after:
         raise ValueError(
             f"adding {SECP256K1_SUITE_CONTEXT_NARROW!r}, which {ECDSA_SECP256K1_SIGNATURE_2019} needs, "

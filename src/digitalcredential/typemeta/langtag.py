@@ -70,4 +70,4 @@ def _alpha(s: str) -> bool:
 
 
 def _digit(s: str) -> bool:
-    return all(c.isdigit() for c in s)
+    return all("0" <= c <= "9" for c in s)

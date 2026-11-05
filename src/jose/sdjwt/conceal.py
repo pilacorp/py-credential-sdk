@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import os
-import random
+import secrets
 from dataclasses import dataclass
 from functools import cmp_to_key
 from typing import Any
@@ -121,7 +121,7 @@ class _Concealer:
                     continue
                 v[i] = self.finish(el)
             while not self.no_array_decoys and placeholders < self.min_digests:
-                i = random.randrange(len(v) + 1)
+                i = secrets.randbelow(len(v) + 1)
                 v.insert(i, _ArrayDigest(_decoy()))
                 placeholders += 1
             for i, el in enumerate(v):

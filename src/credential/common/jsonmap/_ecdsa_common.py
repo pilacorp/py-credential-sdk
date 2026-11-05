@@ -4,7 +4,7 @@ from hashlib import sha256
 from typing import Any
 
 from credential.common.dto.proof import Proof
-from credential.common.processor import canonicalize_document
+from credential.common.processor import canonicalize, canonicalize_document
 
 from credential.common.jsonmap._constants import ECDSA_SECP256K1_SIGNATURE_2019, PROOF_FIELD
 from credential.common.jsonmap._proof_helpers import body_without_proof, to_map_roundtrip
@@ -35,7 +35,7 @@ def concat_hash_data(proof_config_hash: bytes, transformed_document_hash: bytes)
 
 def document_digest(m: dict[str, Any]) -> bytes:
     body = body_without_proof(m)
-    body_canonical = canonicalize_document(body)
+    body_canonical = canonicalize(body)
     return sha256(body_canonical).digest()
 
 
@@ -43,7 +43,7 @@ def proof_hash_data(m: dict[str, Any], doc_hash: bytes, proof: Proof) -> bytes:
     if len(doc_hash) != sha256().digest_size:
         raise ValueError(f"document digest must be {sha256().digest_size} bytes, got {len(doc_hash)}")
     cfg = ecdsa_proof_config(m, proof)
-    cfg_canonical = canonicalize_document(cfg)
+    cfg_canonical = canonicalize(cfg)
     cfg_hash = sha256(cfg_canonical).digest()
     return concat_hash_data(cfg_hash, doc_hash)
 
@@ -54,17 +54,15 @@ def ecdsa_hash_data(m: dict[str, Any], proof: Proof) -> bytes:
 
 
 def legacy_hex_canonicalize(m: dict[str, Any]) -> bytes:
-    from didv2.did.jsoncanonicalizer import transform
-
-    body = {k: v for k, v in m.items() if k != PROOF_FIELD}
-    canonical = transform(body)
-    return sha256(canonical).digest()
+    """Digest hex proofs from SDK <= v1.7.0 signed: SHA-256 of the legacy-canonicalized body
+    (proof removed). Never use it to issue: it covers no proof option (ecdsa_hash_data does)."""
+    body = to_map_roundtrip({k: v for k, v in m.items() if k != PROOF_FIELD})
+    return sha256(canonicalize_document(body)).digest()
 
 
 def canonicalize_full(m: dict[str, Any]) -> bytes:
-    full = to_map_roundtrip(m)
-    canonical = canonicalize_document(full)
-    return sha256(canonical).digest()
+    """Legacy-canonicalize the whole map, proof included, and return its SHA-256."""
+    return sha256(canonicalize_document(to_map_roundtrip(m))).digest()
 
 
 def has_multibase_proof(m: dict[str, Any]) -> bool:

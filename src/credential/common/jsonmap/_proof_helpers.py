@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+import re
+from datetime import datetime, timezone
 from typing import Any
 
 from credential.common.dto.proof import Proof, proof_from_map
@@ -85,6 +86,19 @@ def id_in_array(vm_id: str, doc_id: str, arr: list[str]) -> bool:
     return any(ref == vm_id or ref == frag for ref in arr)
 
 
+_RFC3339 = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$")
+
+
+def parse_rfc3339(ts: str) -> datetime:
+    """Go time.Parse(time.RFC3339, ...): strict RFC 3339 only."""
+    if not isinstance(ts, str) or not _RFC3339.match(ts):
+        raise ValueError(f"invalid proof.created timestamp '{ts}': not RFC 3339")
+    try:
+        return datetime.fromisoformat(ts.upper().replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError(f"invalid proof.created timestamp '{ts}': {exc}") from exc
+
+
 def strict_purpose_check(
     doc: DIDDocument,
     vm: VerificationMethodEntry,
@@ -97,13 +111,10 @@ def strict_purpose_check(
         )
 
     if vm.revoked is not None:
-        try:
-            created = datetime.fromisoformat(proof_created.replace("Z", "+00:00"))
-        except ValueError as exc:
-            raise ValueError(f"invalid proof.created timestamp '{proof_created}': {exc}") from exc
+        created = parse_rfc3339(proof_created)
         revoked = vm.revoked
         if revoked.tzinfo is None:
-            revoked = revoked.replace(tzinfo=created.tzinfo)
+            revoked = revoked.replace(tzinfo=timezone.utc)
         if created >= revoked:
             raise ValueError(
                 f"verification method '{vm.id}' was revoked at {revoked.isoformat().replace('+00:00', 'Z')}; "
@@ -121,45 +132,3 @@ def strict_purpose_check(
         raise ValueError(
             f"verification method '{vm.id}' is not granted purpose '{proof_purpose}' on DID '{doc.id}'"
         )
-
-
-def vm_entry_to_dict(vm: VerificationMethodEntry) -> dict[str, Any]:
-    out: dict[str, Any] = {"id": vm.id, "type": vm.type, "controller": vm.controller}
-    if vm.public_key_hex:
-        out["publicKeyHex"] = vm.public_key_hex
-    if vm.public_key_multibase:
-        out["publicKeyMultibase"] = vm.public_key_multibase
-    if vm.public_key_jwk is not None:
-        j = vm.public_key_jwk
-        out["publicKeyJwk"] = {
-            "kty": j.kty,
-            **({"crv": j.crv} if j.crv else {}),
-            **({"x": j.x} if j.x else {}),
-            **({"y": j.y} if j.y else {}),
-            **({"n": j.n} if j.n else {}),
-            **({"e": j.e} if j.e else {}),
-        }
-    if vm.revoked is not None:
-        out["revoked"] = vm.revoked.isoformat().replace("+00:00", "Z")
-    if vm.revocation_reason:
-        out["revocationReason"] = vm.revocation_reason
-    return out
-
-
-def did_document_to_dict(doc: DIDDocument) -> dict[str, Any]:
-    return {
-        "id": doc.id,
-        "verificationMethod": [vm_entry_to_dict(v) for v in doc.verification_method],
-        "authentication": list(doc.authentication),
-        "assertionMethod": list(doc.assertion_method),
-    }
-
-
-def vm_is_secp256k1(vm: dict[str, Any] | VerificationMethodEntry) -> bool:
-    if isinstance(vm, VerificationMethodEntry):
-        if vm.public_key_hex:
-            return True
-        return vm.type == "EcdsaSecp256k1VerificationKey2019"
-    if vm.get("publicKeyHex"):
-        return True
-    return vm.get("type") == "EcdsaSecp256k1VerificationKey2019"

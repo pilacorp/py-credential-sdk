@@ -1,14 +1,13 @@
-"""Strict base64url (RFC 7515 §2)."""
+"""Strict base64url (RFC 7515 §2, RFC 4648 §3.3 and §3.5)."""
 
 from __future__ import annotations
 
 import base64
-import binascii
 import re
 
 from jose.errors import ErrMalformed
 
-_B64URL_RE = re.compile(r"^[A-Za-z0-9_-]*$")
+_B64URL_RE = re.compile(r"[A-Za-z0-9_-]*")
 
 
 def encode_segment(b: bytes) -> str:
@@ -16,14 +15,16 @@ def encode_segment(b: bytes) -> str:
 
 
 def decode_segment(s: str) -> bytes:
+    """Decode unpadded base64url; every alternative spelling of the same bytes is ErrMalformed."""
     if "\r" in s or "\n" in s:
         raise ErrMalformed("base64url contains a line break")
-    if "=" in s:
-        raise ErrMalformed(f"base64url: Invalid base64-encoded string: number of data characters ({len(s)}) cannot be 1 more than a multiple of 4")
-    if not _B64URL_RE.match(s):
-        raise ErrMalformed("base64url: character outside alphabet")
-    pad = (-len(s)) % 4
-    try:
-        return base64.urlsafe_b64decode(s + ("=" * pad))
-    except binascii.Error as e:
-        raise ErrMalformed(f"base64url: {e}") from e
+    # '=' (padding), the standard alphabet and any other character are outside the alphabet.
+    if not _B64URL_RE.fullmatch(s):
+        raise ErrMalformed("base64url: illegal character")
+    if len(s) % 4 == 1:
+        raise ErrMalformed(f"base64url: number of data characters ({len(s)}) cannot be 1 more than a multiple of 4")
+    b = base64.urlsafe_b64decode(s + "=" * (-len(s) % 4))
+    # RFC 4648 §3.5: non-zero pad bits would give a second spelling ("QQ" and "QR" both -> "A").
+    if encode_segment(b) != s:
+        raise ErrMalformed("base64url: non-zero trailing bits")
+    return b

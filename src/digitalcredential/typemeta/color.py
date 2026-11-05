@@ -28,7 +28,7 @@ def rgb_color(s: str) -> bool:
 def _css_integer(s: str) -> bool:
     if s and s[0] in "+-":
         s = s[1:]
-    return bool(s) and s.isdigit()
+    return bool(s) and all("0" <= c <= "9" for c in s)
 
 
 def _css_number(s: str) -> bool:
@@ -36,5 +36,9 @@ def _css_number(s: str) -> bool:
         s = s[1:]
     if "." in s:
         a, b = s.split(".", 1)
-        return a.isdigit() and b.isdigit()
-    return s.isdigit()
+        return _digits(a) and bool(b) and _digits(b)
+    return bool(s) and _digits(s)
+
+
+def _digits(s: str) -> bool:
+    return all("0" <= c <= "9" for c in s)

@@ -25,6 +25,7 @@ from credential.common.jsonmap._proof_helpers import (
     strict_purpose_check,
 )
 from credential.common.jsonmap._secp256k1 import add_ecdsa_secp256k1_proof, signing_suite_for_key
+from credential.common.jsonmap._ecdsa_common import canonicalize_full
 from credential.common.jsonmap.map import JSONMap, verify_one_proof
 
 __all__ = [
@@ -35,6 +36,7 @@ __all__ = [
     "add_ecdsa_secp256k1_proof",
     "add_ecdsasd_base_proof",
     "add_jws_proof",
+    "canonicalize_full",
     "derive_ecdsasd",
     "document_digest",
     "ecdsa_hash_data",

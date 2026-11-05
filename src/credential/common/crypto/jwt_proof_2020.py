@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-import base64
 from hashlib import sha256
 from typing import Any
 
 from eth_keys import keys
 from eth_keys.exceptions import BadSignature
+
+from credential.common.util.b64 import b64url_decode
 
 
 def verify_jwt_proof(document: dict[str, Any], pub_compressed: bytes) -> bool:
@@ -26,7 +27,7 @@ def _signature_and_message(jwt_token: str) -> tuple[bytes, bytes]:
     parts = jwt_token.split(".")
     if len(parts) != 3:
         raise ValueError("invalid JWT format")
-    signature = base64.urlsafe_b64decode(parts[2] + "=" * (-len(parts[2]) % 4))
+    signature = b64url_decode(parts[2])
     message = (parts[0] + "." + parts[1]).encode("ascii")
     return signature, message
 

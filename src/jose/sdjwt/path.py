@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from jose.errors import ErrInvalidArgument
+from jose.internal.errtext.errtext import _go_quote
 
 Path = list[Any]
 
@@ -16,22 +16,22 @@ def validate_path(p: Path) -> None:
     for el in p:
         if isinstance(el, str):
             continue
-        if isinstance(el, int):
+        if isinstance(el, int) and not isinstance(el, bool):
             if el < 0:
                 raise ErrInvalidArgument(f"sdjwt: path {format_path(p)} has a negative index")
             continue
         raise ErrInvalidArgument(f"sdjwt: path {format_path(p)} has an element of type {type(el).__name__}, want string or int")
 
 
-def format_path(p: Path, quote=json.dumps) -> str:
+def format_path(p: Path, quote=_go_quote) -> str:
     parts: list[str] = []
     for el in p:
         if isinstance(el, str):
             parts.append(quote(el))
-        elif isinstance(el, int):
+        elif isinstance(el, int) and not isinstance(el, bool):
             parts.append(str(el))
         else:
-            parts.append(repr(type(el)))
+            parts.append(type(el).__name__)
     return "[" + ",".join(parts) + "]"
 
 
@@ -64,7 +64,7 @@ def lookup(v: Any, p: Path) -> tuple[Any, bool]:
             if not isinstance(cur, dict) or el not in cur:
                 return None, False
             cur = cur[el]
-        elif isinstance(el, int):
+        elif isinstance(el, int) and not isinstance(el, bool):
             if not isinstance(cur, list) or el < 0 or el >= len(cur):
                 return None, False
             cur = cur[el]

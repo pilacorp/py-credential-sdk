@@ -3,18 +3,37 @@ from __future__ import annotations
 from typing import Any
 
 from eth_abi import decode, encode
-from eth_utils import is_address, keccak, to_checksum_address
-from credential.vcanchor.hash import normalize_hash32
+from eth_utils import keccak, to_checksum_address
 from credential.vcanchor.merkle import merge_sorted
-from credential.vccontract.model import VerifyByTxRequest, VerifyRequest
+from credential.vccontract.model import VerifyByTxRequest, VerifyRequest, hex_to_bytes32
 from credential.vccontract.rpc import JsonRpc
-from didv2.hexutil import hex_to_bytes, with_0x
+from didv2.hexutil import hex_to_bytes, is_hex_address, with_0x
 
 ERR_NO_CONTRACT = "no contract address configured"
 ERR_TX_NOT_FOUND = "transaction not found"
 ERR_TX_REVERTED = "transaction reverted"
 ERR_UNTRUSTED = "contract address is not in this client's trusted set"
 ERR_ROOT_NOT_ANCHORED = "transaction did not anchor a root for this issuer and tree index"
+
+class ErrNoContractAddress(ValueError):
+    pass
+
+
+class ErrTxNotFound(ValueError):
+    pass
+
+
+class ErrTxReverted(ValueError):
+    pass
+
+
+class ErrRootNotAnchored(ValueError):
+    pass
+
+
+class ErrUntrustedContract(ValueError):
+    pass
+
 
 BATCH_ANCHORED = "BatchRootsAnchored"
 SINGLE_ANCHORED = "TreeRootAnchored"
@@ -43,12 +62,23 @@ EVENT_TOPICS = {
 
 
 def _parse_contract_address(value: str) -> str:
-    if not is_address(value):
+    if not is_hex_address(value):
         raise ValueError(f"{value!r} is not a 20-byte hex address")
     addr = to_checksum_address(value)
     if addr.lower() == "0x0000000000000000000000000000000000000000":
         raise ValueError("the zero address names no deployment")
     return addr
+
+
+def _require_success(rec: dict) -> None:
+    """go-ethereum: anything but status 1 (including a missing status) is a failed transaction."""
+    status = rec.get("status")
+    try:
+        ok = (int(status, 16) if isinstance(status, str) else int(status)) == 1
+    except (TypeError, ValueError):
+        ok = False
+    if not ok:
+        raise ErrTxReverted(ERR_TX_REVERTED)
 
 
 def hash_pair(a: bytes, b: bytes) -> bytes:
@@ -70,8 +100,16 @@ def _topic_address(topic: str) -> str:
 
 
 def _decode_leaf_and_proof(leaf: str, proof: list[str]) -> tuple[bytes, list[bytes]]:
-    _, leaf_raw = normalize_hash32(leaf)
-    proof_raw = [normalize_hash32(p)[1] for p in proof]
+    try:
+        leaf_raw = hex_to_bytes32(leaf)
+    except ValueError as exc:
+        raise ValueError(f"invalid leaf: {exc}") from exc
+    proof_raw = []
+    for i, p in enumerate(proof):
+        try:
+            proof_raw.append(hex_to_bytes32(p))
+        except ValueError as exc:
+            raise ValueError(f"proof element {i}: {exc}") from exc
     return leaf_raw, proof_raw
 
 
@@ -184,24 +222,22 @@ class CredentialRegistry:
     def _fetch_receipt(self, tx_hash: str) -> dict:
         rec = self.rpc.call("eth_getTransactionReceipt", [tx_hash])
         if rec is None:
-            raise ValueError(ERR_TX_NOT_FOUND)
+            raise ErrTxNotFound(ERR_TX_NOT_FOUND)
         if not isinstance(rec, dict):
             raise ValueError(f"receipt source returned no receipt and no error for tx {tx_hash}")
         return rec
 
     def transaction_receipt(self, tx_hash: str) -> dict:
         rec = self._fetch_receipt(tx_hash)
-        if rec.get("status") in ("0x0", "0", 0):
-            raise ValueError(ERR_TX_REVERTED)
+        _require_success(rec)
         return rec
 
     def is_root_anchored(self, tx_hash: str, issuer_address: str, root: str | bytes) -> bool:
-        root_raw = root if isinstance(root, (bytes, bytearray)) else normalize_hash32(root)[1]
+        root_raw = bytes(root) if isinstance(root, (bytes, bytearray)) else hex_to_bytes32(root)
         if root_raw == ZERO32:
             return False
         rec = self._fetch_receipt(tx_hash)
-        if rec.get("status") in ("0x0", "0", 0):
-            raise ValueError(ERR_TX_REVERTED)
+        _require_success(rec)
         return self._root_in_receipt(rec, issuer_address, root_raw, emitter=None)
 
     def is_root_anchored_at_contract(
@@ -212,13 +248,12 @@ class CredentialRegistry:
         contract_address: str,
     ) -> bool:
         if not self.trusts(contract_address):
-            raise ValueError(f"{ERR_UNTRUSTED}: {to_checksum_address(contract_address)}")
-        root_raw = root if isinstance(root, (bytes, bytearray)) else normalize_hash32(root)[1]
+            raise ErrUntrustedContract(f"{ERR_UNTRUSTED}: {to_checksum_address(contract_address)}")
+        root_raw = bytes(root) if isinstance(root, (bytes, bytearray)) else hex_to_bytes32(root)
         if root_raw == ZERO32:
             return False
         rec = self._fetch_receipt(tx_hash)
-        if rec.get("status") in ("0x0", "0", 0):
-            raise ValueError(ERR_TX_REVERTED)
+        _require_success(rec)
         emitter = to_checksum_address(contract_address)
         return self._root_in_receipt(rec, issuer_address, root_raw, emitter=emitter)
 
@@ -245,8 +280,7 @@ class CredentialRegistry:
 
     def get_anchored_root(self, tx_hash: str, issuer_address: str, tree_index: int) -> str:
         rec = self._fetch_receipt(tx_hash)
-        if rec.get("status") in ("0x0", "0", 0):
-            raise ValueError(ERR_TX_REVERTED)
+        _require_success(rec)
         event_id = EVENT_TOPICS[LEGACY_BATCH].lower()
         issuer_l = to_checksum_address(issuer_address).lower()
         for log in rec.get("logs") or []:
@@ -269,11 +303,11 @@ class CredentialRegistry:
                     continue
                 if int(indices[i]) == tree_index:
                     return with_0x(bytes(new_roots[i]))
-        raise ValueError(ERR_ROOT_NOT_ANCHORED)
+        raise ErrRootNotAnchored(ERR_ROOT_NOT_ANCHORED)
 
     def verify_vc_hash_on_chain(self, req: VerifyRequest) -> bool:
         if not self.address:
-            raise ValueError(
+            raise ErrNoContractAddress(
                 f"{ERR_NO_CONTRACT}: verifyVC is a call on the contract that keeps roots in storage, "
                 "so its address must be passed to NewCredentialRegistry"
             )
@@ -293,11 +327,11 @@ class CredentialRegistry:
 
     def get_tree_root(self, issuer_address: str, tree_index: int) -> str:
         if not self.address:
-            raise ValueError(
+            raise ErrNoContractAddress(
                 f"{ERR_NO_CONTRACT}: getTreeRoot is a call on the contract that keeps roots in storage, "
                 "so its address must be passed to NewCredentialRegistry"
             )
-        if not is_address(issuer_address):
+        if not is_hex_address(issuer_address):
             raise ValueError(f"invalid issuer address: {issuer_address!r}")
         data = self._encode_call(
             "getTreeRoot(address,uint256)",
@@ -311,11 +345,11 @@ class CredentialRegistry:
 
     def has_tree(self, issuer_address: str, tree_index: int) -> bool:
         if not self.address:
-            raise ValueError(
+            raise ErrNoContractAddress(
                 f"{ERR_NO_CONTRACT}: treeExists is a call on the contract that keeps roots in storage, "
                 "so its address must be passed to NewCredentialRegistry"
             )
-        if not is_address(issuer_address):
+        if not is_hex_address(issuer_address):
             raise ValueError(f"invalid issuer address: {issuer_address!r}")
         data = self._encode_call(
             "treeExists(address,uint256)",
@@ -326,64 +360,54 @@ class CredentialRegistry:
 
     def verify_vc_hash_by_tx(
         self,
-        issuer_address: str,
-        leaf: str,
-        proof: list[str],
-        tx_hash: str,
+        issuer_address: str | VerifyByTxRequest,
+        leaf: str = "",
+        proof: list[str] | None = None,
+        tx_hash: str = "",
         expected_root: str | None = None,
         *,
         contract_address: str = "",
     ) -> bool:
-        req = VerifyByTxRequest(
-            issuer_address=issuer_address,
-            leaf=leaf,
-            proof=proof,
-            tx_hash=tx_hash,
-            contract_address=contract_address,
+        """True when leaf+proof fold to a root that ``tx_hash`` anchored for the issuer.
+
+        False with no error = the chain was asked and does not attest the leaf (a reverted tx
+        included); an exception = nothing was established (bad input, RPC failure, ErrTxNotFound)."""
+        if isinstance(issuer_address, VerifyByTxRequest):
+            return self.verify_vc_hash_by_tx_request(issuer_address, expected_root=expected_root)
+        return self.verify_vc_hash_by_tx_request(
+            VerifyByTxRequest(
+                issuer_address=issuer_address,
+                leaf=leaf,
+                proof=list(proof or []),
+                tx_hash=tx_hash,
+                contract_address=contract_address,
+            ),
+            expected_root=expected_root,
         )
-        try:
-            req.validate()
-        except ValueError:
-            raise
+
+    def verify_vc_hash_by_tx_request(self, req: VerifyByTxRequest, *, expected_root: str | None = None) -> bool:
+        req.validate()
         leaf_raw, proof_raw = _decode_leaf_and_proof(req.leaf, req.proof)
+        try:
+            hex_to_bytes32(req.tx_hash)
+        except ValueError as exc:
+            raise ValueError(f"invalid tx hash: {exc}") from exc
         folded = fold_proof(leaf_raw, proof_raw)
-        if expected_root and normalize_hash32(expected_root)[1] != folded:
+        if expected_root and hex_to_bytes32(expected_root) != folded:
             return False
         try:
             if req.contract_address:
                 return self.is_root_anchored_at_contract(
-                    req.tx_hash,
-                    req.issuer_address,
-                    folded,
-                    req.contract_address,
+                    req.tx_hash, req.issuer_address, folded, req.contract_address
                 )
             return self.is_root_anchored(req.tx_hash, req.issuer_address, folded)
-        except ValueError as exc:
-            if str(exc) == ERR_TX_REVERTED:
-                return False
-            raise
-
-    def verify_vc_hash_by_tx_request(self, req: VerifyByTxRequest) -> bool:
-        req.validate()
-        leaf_raw, proof_raw = _decode_leaf_and_proof(req.leaf, req.proof)
-        folded = fold_proof(leaf_raw, proof_raw)
-        try:
-            if req.contract_address:
-                return self.is_root_anchored_at_contract(
-                    req.tx_hash,
-                    req.issuer_address,
-                    folded,
-                    req.contract_address,
-                )
-            return self.is_root_anchored(req.tx_hash, req.issuer_address, folded)
-        except ValueError as exc:
-            if str(exc) == ERR_TX_REVERTED:
-                return False
-            raise
+        except ErrTxReverted:
+            # a reverted tx ran and wrote nothing: a verdict ("does not attest"), not a failure to check
+            return False
 
     def eth_call(self, to: str, data: str) -> str:
         if not to:
-            raise ValueError(ERR_NO_CONTRACT)
+            raise ErrNoContractAddress(ERR_NO_CONTRACT)
         result = self.rpc.call("eth_call", [{"to": to, "data": data}, "latest"])
         if result is None:
             raise ValueError("eth_call returned no data")
@@ -404,6 +428,9 @@ class CredentialRegistry:
     @staticmethod
     def _decode_bool(data: str) -> bool:
         raw = hex_to_bytes(data)
-        if not raw:
+        if len(raw) < 32:
             raise ValueError("call returned no data")
-        return int.from_bytes(raw[-32:], "big") != 0
+        word = int.from_bytes(raw[:32], "big")
+        if word > 1:  # go-ethereum's ABI decoder refuses a bool word other than 0/1
+            raise ValueError("abi: improperly encoded boolean value")
+        return word == 1

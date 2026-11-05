@@ -3,28 +3,25 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from eth_keys import keys
-
-from didv2.hexutil import hex_to_bytes, normalize_hex
-
-SECP256K1_VM_TYPE = "EcdsaSecp256k1VerificationKey2019"
-MULTIKEY_VM_TYPE = "Multikey"
-CID_CONTEXT = "https://www.w3.org/ns/cid/v1"
-SUPPORTED = ("authentication", "assertionMethod")
-
-
-def canonical_vm_id(did: str, id_or_fragment: str) -> str:
-    if id_or_fragment.startswith("#"):
-        return did + id_or_fragment
-    return id_or_fragment
+from didv2.ethereum import compress_secp256k1, secp256k1_point
+from didv2.did.did import (
+    CID_CONTEXT,
+    MULTIKEY_VM_TYPE,
+    SECP256K1_VM_TYPE,
+    SUPPORTED_PURPOSES as SUPPORTED,
+    canonical_vm_id,
+    rfc3339_nano,
+    vm_type_for as _vm_type_for,
+)
 
 
 def find_verification_method(doc: dict[str, Any] | None, id_or_fragment: str) -> dict[str, Any] | None:
     if not doc:
         return None
-    target = canonical_vm_id(doc["id"], id_or_fragment)
+    did = doc.get("id") or ""
+    target = canonical_vm_id(did, id_or_fragment)
     for vm in doc.get("verificationMethod") or []:
-        if canonical_vm_id(doc["id"], vm["id"]) == target:
+        if canonical_vm_id(did, vm.get("id") or "") == target:
             return vm
     return None
 
@@ -40,6 +37,7 @@ def add_verification_method(
         raise ValueError("document.id is required")
     purposes = purposes or []
     expected = _vm_type_for(vm)
+    # validate purposes before touching the document: a later failure must not leave a half-added VM
     _validate_purposes(purposes)
     next_vm = {
         "id": canonical_vm_id(doc["id"], vm["id"]) if vm.get("id") else _next_sequential_kid(doc),
@@ -58,7 +56,9 @@ def add_verification_method(
     existing = _find_by_fingerprint(doc, _key_fingerprint(next_vm))
     if existing:
         raise ValueError(f"verification method with the same public key already exists: {existing}")
-    doc.setdefault("verificationMethod", []).append(next_vm)
+    if doc.get("verificationMethod") is None:
+        doc["verificationMethod"] = []
+    doc["verificationMethod"].append(next_vm)
     if next_vm["type"] == MULTIKEY_VM_TYPE:
         _ensure_context(doc, CID_CONTEXT)
     for p in purposes:
@@ -73,20 +73,22 @@ def rotate_verification_method(
     reason: str = "superseded",
     revoked_at: datetime | None = None,
 ) -> str:
+    if doc is None:
+        raise ValueError("document is nil")
     if not old_kid:
         raise ValueError("old_kid is required")
+    revoked_at = revoked_at or datetime.now(timezone.utc)
+    reason = reason or "superseded"
     old = find_verification_method(doc, old_kid)
     if not old:
         raise ValueError(f"verification method not found: {old_kid}")
-    if old.get("revoked"):
+    if old.get("revoked") is not None:
         raise ValueError(f"verification method {old['id']!r} is already revoked")
-    purposes = _purposes_of_kid(doc, old["id"])
+    old_id = old["id"]
+    purposes = _purposes_of_kid(doc, old_id)
     new_id = add_verification_method(doc, new_vm, purposes)
-    after = find_verification_method(doc, old_kid)
-    if after is None:
-        raise ValueError(f"verification method index mismatch after append: {old_kid}")
-    after["revoked"] = revoked_at or datetime.now(timezone.utc)
-    after["revocationReason"] = reason or "superseded"
+    old["revoked"] = revoked_at
+    old["revocationReason"] = reason
     _ensure_context(doc, CID_CONTEXT)
     return new_id
 
@@ -97,21 +99,31 @@ def revoke_verification_method(
     reason: str,
     revoked_at: datetime | None = None,
 ) -> None:
+    """Mark a VM revoked.  It stays in the relationship arrays on purpose: verifiers compare
+    proof.created with the revoked timestamp."""
+    if doc is None:
+        raise ValueError("document is nil")
     if not kid:
         raise ValueError("kid is required")
     if not reason:
         raise ValueError("reason is required")
+    revoked_at = revoked_at or datetime.now(timezone.utc)
     vm = find_verification_method(doc, kid)
     if not vm:
         raise ValueError(f"verification method not found: {kid}")
-    if vm.get("revoked"):
-        raise ValueError(f"verification method {vm['id']!r} is already revoked")
-    vm["revoked"] = revoked_at or datetime.now(timezone.utc)
+    if vm.get("revoked") is not None:
+        at = rfc3339_nano(vm["revoked"])
+        raise ValueError(
+            f"verification method {vm['id']!r} is already revoked at {at} (reason: {vm.get('revocationReason', '')})"
+        )
+    vm["revoked"] = revoked_at
     vm["revocationReason"] = reason
     _ensure_context(doc, CID_CONTEXT)
 
 
 def add_verification_method_purposes(doc: dict[str, Any], kid: str, purposes: list[str]) -> None:
+    if doc is None:
+        raise ValueError("document is nil")
     if not kid:
         raise ValueError("kid is required")
     if not purposes:
@@ -119,7 +131,7 @@ def add_verification_method_purposes(doc: dict[str, Any], kid: str, purposes: li
     vm = find_verification_method(doc, kid)
     if not vm:
         raise ValueError(f"verification method not found: {kid}")
-    if vm.get("revoked"):
+    if vm.get("revoked") is not None:
         raise ValueError(f"verification method {vm['id']!r} is revoked")
     _validate_purposes(purposes)
     for p in purposes:
@@ -127,6 +139,8 @@ def add_verification_method_purposes(doc: dict[str, Any], kid: str, purposes: li
 
 
 def remove_verification_method_purposes(doc: dict[str, Any], kid: str, purposes: list[str]) -> None:
+    if doc is None:
+        raise ValueError("document is nil")
     if not kid:
         raise ValueError("kid is required")
     if not purposes:
@@ -136,22 +150,6 @@ def remove_verification_method_purposes(doc: dict[str, Any], kid: str, purposes:
     _validate_purposes(purposes)
     for p in purposes:
         _remove_purpose(doc, p, kid)
-
-
-def _vm_type_for(vm: dict[str, Any]) -> str:
-    if vm.get("publicKeyJwk"):
-        raise ValueError(
-            "publicKeyJwk is not supported: publish secp256k1 as publicKeyHex or P-256 as publicKeyMultibase"
-        )
-    has_hex = bool(vm.get("publicKeyHex"))
-    has_mb = bool(vm.get("publicKeyMultibase"))
-    if has_hex and has_mb:
-        raise ValueError("verification method must have publicKeyHex or publicKeyMultibase, not both")
-    if has_hex:
-        return SECP256K1_VM_TYPE
-    if has_mb:
-        return MULTIKEY_VM_TYPE
-    raise ValueError("verification method must have either publicKeyHex or publicKeyMultibase")
 
 
 def _ensure_context(doc: dict[str, Any], ctx: str) -> None:
@@ -179,12 +177,11 @@ def _key_fingerprint(vm: dict[str, Any]) -> str:
 
 
 def _normalize_secp(h: str) -> str:
-    trimmed = normalize_hex(h)
+    """Reduce a hex key to its compressed point; anything else compares as lowercase hex w/o 0x."""
+    trimmed = h.lower().removeprefix("0x")
     try:
-        raw = hex_to_bytes(trimmed)
-        pub = keys.PublicKey.from_compressed_bytes(raw) if len(raw) == 33 else keys.PublicKey.from_bytes(raw[1:])
-        return pub.to_compressed_bytes().hex()
-    except Exception:
+        return compress_secp256k1(*secp256k1_point(bytes.fromhex(trimmed))).hex()
+    except ValueError:
         return trimmed
 
 

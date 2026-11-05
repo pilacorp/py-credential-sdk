@@ -28,14 +28,14 @@ def test_latest_active_wins() -> None:
     add_verification_method(doc, {"publicKeyHex": PUB1}, ["assertionMethod"])
     add_verification_method(doc, {"publicKeyHex": PUB2}, ["assertionMethod"])
     vm = select_latest_active_vm_for_purpose(doc, "assertionMethod")
-    assert vm["id"].endswith("#key-2")
+    assert vm.id.endswith("#key-2")
 
 
 def test_single_vm_shortcut() -> None:
     doc = _doc()
     add_verification_method(doc, {"publicKeyHex": PUB1})
     vm = select_default_signing_vm(doc, "assertionMethod")
-    assert vm["id"].endswith("#key-1")
+    assert vm.id.endswith("#key-1")
 
 
 def test_unknown_purpose_errors() -> None:

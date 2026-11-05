@@ -8,7 +8,7 @@ from typing import Any, Mapping
 
 from jose import base64 as jose_b64
 from jose import json as jose_json
-from jose.errors import ErrInvalidArgument, ErrMalformed, ErrUnsupportedAlg, ErrUnsupportedKey
+from jose.errors import ErrInvalidArgument, ErrMalformed, ErrUnsupportedAlg, ErrUnsupportedKey, wrap
 from jose.internal.ec import Kind, from_public_key, verify_rs
 from jose.internal.errtext import quote
 from jose.jws.errors import (
@@ -29,7 +29,20 @@ _MAX_HEADER_SEGMENT = (4 * _MAX_HEADER_BYTES + 2) // 3
 
 _supported_algs = "the SDK supports ES256 and ES256K"
 
-Header = dict[str, Any]
+class Header(dict):
+    """A decoded JOSE Header (RFC 7515 §4): a dict with the accessors of Go's jws.Header."""
+
+    def alg(self) -> str:
+        return _header_str(self, "alg")
+
+    def typ(self) -> str:
+        return _header_str(self, "typ")
+
+    def kid(self) -> str:
+        return _header_str(self, "kid")
+
+    def typ_is(self, media_type: str) -> bool:
+        return header_typ_is(self, media_type)
 
 
 @dataclass
@@ -58,7 +71,7 @@ def sign(ctx: Any, signer: Any, pub: Any, header: Header | None, payload: bytes 
     if alg != want:
         raise ErrAlgKeyMismatch(f"signer alg {alg}, key on {pt.kind.name()} needs {want}")
     h: dict[str, Any] = dict(header or {})
-    if "alg" in h and h["alg"] != alg:
+    if "alg" in h and not (isinstance(h["alg"], str) and h["alg"] == alg):
         got = h["alg"]
         if not isinstance(got, str):
             got = f"of type {type(got).__name__}"
@@ -80,11 +93,15 @@ def sign(ctx: Any, signer: Any, pub: Any, header: Header | None, payload: bytes 
     try:
         sig = signer.sign(ctx, signing_input.encode("ascii"))
     except Exception as e:
-        raise ErrSignerFailed(str(e)) from e
-    token = signing_input + "." + jose_b64.encode_segment(sig)
+        # Go wraps the signer's own error too: `except ErrSignerFailed` and `except type(e)` both match.
+        raise wrap(ErrSignerFailed, e, f"jws: signer failed: {e}") from e
+    if not isinstance(sig, (bytes, bytearray)):
+        raise ErrSelfCheck(f"signer answered {type(sig).__name__}, not bytes")
+    token = signing_input + "." + jose_b64.encode_segment(bytes(sig))
     try:
         verify(token, pub, [alg])
     except Exception as e:
+        # Not wrapped: the fault is the signer's, so the error must not also match ErrBadSignature.
         raise ErrSelfCheck(str(e)) from e
     return token
 

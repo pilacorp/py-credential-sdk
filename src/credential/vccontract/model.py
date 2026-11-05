@@ -1,30 +1,42 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
-from eth_utils import is_address
-
-from credential.vcanchor.hash import normalize_hash32
+from didv2.hexutil import is_hex_address
 
 HASH32_HEX_LEN = 64
+_HEX = re.compile(r"^(?:[0-9a-fA-F]{2})*$")
 
 
 def validate_hash32(value: str) -> None:
-    trimmed = value.strip().removeprefix("0x")
+    """32 bytes of hex with an optional lowercase "0x" prefix (length only, as Go validateHash32)."""
+    trimmed = value.removeprefix("0x")
     if len(trimmed) != HASH32_HEX_LEN:
         raise ValueError(f"expected {HASH32_HEX_LEN} hex chars (32 bytes), got {len(trimmed)}")
 
 
+def hex_to_bytes32(value: str) -> bytes:
+    """Go hexToBytes32: strict hex (no whitespace, no 0X), exactly 32 bytes."""
+    trimmed = value.removeprefix("0x")
+    if not _HEX.match(trimmed):
+        raise ValueError("invalid hex")
+    raw = bytes.fromhex(trimmed)
+    if len(raw) != 32:
+        raise ValueError(f"length must be 32 bytes, got {len(raw)}")
+    return raw
+
+
 def validate_proof_fields(issuer_address: str, leaf: str, proof: list[str]) -> None:
-    if not is_address(issuer_address):
+    if not is_hex_address(issuer_address):
         raise ValueError(f"invalid issuer address: {issuer_address!r}")
     try:
-        normalize_hash32(leaf)
+        validate_hash32(leaf)
     except ValueError as exc:
         raise ValueError(f"invalid leaf: {exc}") from exc
     for i, item in enumerate(proof):
         try:
-            normalize_hash32(item)
+            validate_hash32(item)
         except ValueError as exc:
             raise ValueError(f"invalid proof element at index {i}: {exc}") from exc
 
@@ -42,6 +54,9 @@ class VerifyRequest:
 
 @dataclass
 class VerifyByTxRequest:
+    """Merkle proof plus the tx that anchored the root.  ``tree_index`` is deprecated and ignored.
+    Derive ``issuer_address`` and ``leaf`` from the credential itself, never from the proof bundle."""
+
     issuer_address: str
     leaf: str
     proof: list[str]
@@ -52,8 +67,8 @@ class VerifyByTxRequest:
     def validate(self) -> None:
         validate_proof_fields(self.issuer_address, self.leaf, self.proof)
         try:
-            normalize_hash32(self.tx_hash)
+            validate_hash32(self.tx_hash)
         except ValueError as exc:
             raise ValueError(f"invalid tx hash: {exc}") from exc
-        if self.contract_address and not is_address(self.contract_address):
+        if self.contract_address and not is_hex_address(self.contract_address):
             raise ValueError(f"invalid contract address: {self.contract_address!r}")

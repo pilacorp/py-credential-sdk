@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Callable, Protocol
 
-from credential.common.sdjwt.helper import is_jwt, is_sd_jwt
+from credential.common.sdjwt.helper import b64url_decode, is_jwt, is_sd_jwt
 from credential.vc import credential_helper as helper
 
 CredentialData = helper.CredentialData
@@ -79,21 +79,7 @@ class CredentialContents:
     terms_of_use: list[TermsOfUse] = field(default_factory=list)
 
 
-class ResolverProvider(Protocol):
-    def resolve_document(self, did: str) -> Any: ...
-
-
-class HTTPResolver:
-    def __init__(self, base_url: str) -> None:
-        self.base_url = base_url.rstrip("/")
-
-    def resolve_document(self, did: str) -> Any:
-        from urllib.request import urlopen
-
-        url = f"{self.base_url}/{did}"
-        with urlopen(url) as resp:  # noqa: S310
-            body = resp.read()
-        return json.loads(body)
+from credential.common.verification_method import HTTPResolver, ResolverProvider  # noqa: E402,F401
 
 
 @dataclass
@@ -249,6 +235,56 @@ def signing_options(opts: list[CredentialOpt]) -> list[CredentialOpt]:
     return [*opts, disable_verify]
 
 
+def refuse_overwrite(current: str, options: CredentialOptions) -> None:
+    """A JWT holds one signature: signing again replaces it, so it needs ``with_replace_proof()``."""
+    if not current or options.replace_proof:
+        return
+    raise ValueError(
+        "credential is already signed; signing again would replace that signature — pass WithReplaceProof to do so deliberately"
+    )
+
+
+def refuse_replace_on_jsonld(options: CredentialOptions) -> None:
+    """JSON-LD signing appends to the proof set, so ``with_replace_proof()`` is refused rather than ignored."""
+    if not options.replace_proof:
+        return
+    raise ValueError(
+        "WithReplaceProof does not apply to JSON-LD: proofs are appended to the proof set, not replaced; "
+        "build a new credential without the proof to re-sign"
+    )
+
+
+def run_options(
+    credential_data: CredentialData,
+    options: CredentialOptions,
+    verify_proof: Callable[[], None] | None = None,
+) -> None:
+    """Schema / revocation / proof checks (first failure wins), then the validity window (Go executeOptions)."""
+    errors: list[str] = []
+    if options.is_validate_schema:
+        try:
+            helper.validate_credential(credential_data, options)
+        except Exception as exc:
+            errors.append(f"validate credential: {exc}")
+    if not errors and options.is_check_revocation:
+        try:
+            helper.check_revocation(credential_data)
+        except Exception as exc:
+            errors.append(f"check revocation: {exc}")
+    if not errors and options.is_verify_proof and verify_proof is not None:
+        try:
+            verify_proof()
+        except Exception as exc:
+            errors.append(f"verify proof: {exc}")
+    if errors:
+        raise ValueError(f"credential verification failed: {errors[0]}")
+    if options.is_check_expiration:
+        try:
+            helper.check_expiration(credential_data, options.leeway)
+        except Exception as exc:
+            raise ValueError(f"failed to check expiration: {exc}") from exc
+
+
 def get_options(*opts: CredentialOpt) -> CredentialOptions:
     options = CredentialOptions(did_base_url=_config_base_url)
     for opt in opts:
@@ -264,22 +300,6 @@ class Credential(ABC):
 
     def get_contents(self) -> bytes:
         raise NotImplementedError
-
-
-class ParsedJSONCredential(Credential):
-    def __init__(self, credential_data: CredentialData) -> None:
-        self.credential_data = credential_data
-
-    def extract_field(self, path: str) -> Any:
-        if not self.credential_data:
-            return None
-        return helper.extract_field_from_map(self.credential_data, path)
-
-    def get_contents(self) -> bytes:
-        return json.dumps(self.credential_data, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
-
-    def get_type(self) -> str:
-        return "JSON"
 
 
 class ParsedJWTCredential(Credential):
@@ -321,96 +341,25 @@ def serialize_credential_contents(vcc: CredentialContents | None) -> CredentialD
 
 
 def _execute_options(credential_data: CredentialData, opts: list[CredentialOpt]) -> None:
-    options = get_options(*opts)
-    errors: list[Exception] = []
-    if options.is_validate_schema:
-        try:
-            helper.validate_credential(credential_data, options)
-        except Exception as exc:
-            errors.append(ValueError(f"validate credential: {exc}"))
-    if options.is_check_revocation:
-        try:
-            helper.check_revocation(credential_data)
-        except Exception as exc:
-            errors.append(ValueError(f"check revocation: {exc}"))
-    if errors:
-        raise ValueError(f"credential verification failed: {errors[0]}")
-    if options.is_check_expiration:
-        helper.check_expiration(credential_data, options.leeway)
+    run_options(credential_data, get_options(*opts))
 
 
-def parse_json_credential(raw_json: bytes | str, *opts: CredentialOpt) -> ParsedJSONCredential:
-    if isinstance(raw_json, str):
-        raw = raw_json.encode("utf-8")
-    else:
-        raw = raw_json
-    if not raw:
-        raise ValueError("JSON string is empty")
-    if not _is_json_credential(raw):
-        raise ValueError("invalid JSON format")
-    data = json.loads(raw)
-    if not isinstance(data, dict):
-        raise ValueError("invalid JSON format")
-    helper.require_credential_properties(data)
-    cred = ParsedJSONCredential(data)
-    _execute_options(data, list(opts))
-    return cred
+def parse_json_credential(raw_json: bytes | str, *opts: CredentialOpt) -> Credential:
+    from credential.vc.json_credential import JSONCredential
+
+    return JSONCredential.parse(raw_json, *opts)
 
 
-def parse_jwt_credential(raw_jwt: str, *opts: CredentialOpt) -> ParsedJWTCredential:
-    raw_jwt = raw_jwt.strip().strip('"')
-    if "~" in raw_jwt:
-        raise ValueError(
-            f"ParseJWTCredential: token is in SD-JWT combined form: {ERR_SDJWT_REQUIRES_JOSE.args[0]}"
-        )
-    if not _is_jwt_credential(raw_jwt):
-        raise ValueError("invalid JWT format")
-    parts = raw_jwt.split(".")
-    header_b64, payload_b64 = parts[0], parts[1]
-    signature = parts[2] if len(parts) == 3 else ""
-    payload_bytes = base64.urlsafe_b64decode(payload_b64 + "=" * ((4 - len(payload_b64) % 4) % 4))
-    payload_map = json.loads(payload_bytes)
-    if not isinstance(payload_map, dict):
-        raise ValueError("failed to unmarshal payload")
-    vc_data = payload_map.get("vc")
-    if vc_data is None:
-        raise ValueError("vc claim not found in JWT payload")
-    if not isinstance(vc_data, dict):
-        raise ValueError("vc claim is not a valid JSON object")
-    signing_input = header_b64 + "." + payload_b64
-    cred = ParsedJWTCredential(signing_input, vc_data, payload_map, signature)
-    _execute_options(vc_data, list(opts))
-    return cred
+def parse_jwt_credential(raw_jwt: str, *opts: CredentialOpt) -> Any:
+    from credential.vc.jwt_credential import JWTCredential
+
+    return JWTCredential.parse(raw_jwt, *opts)
 
 
-def new_jwt_credential(vcc: CredentialContents, *opts: CredentialOpt) -> ParsedJWTCredential:
-    options = get_options(*opts)
-    if options.has_sd_options():
-        raise ValueError(f"NewJWTCredential: {ERR_SDJWT_REQUIRES_JOSE}")
-    vc_map = helper.serialize_credential_contents(vcc)
-    vc_map = helper.normalize_credential_data(vc_map)
-    payload_data = vc_map
-    other_claims: dict[str, Any] = {}
-    if vcc.issuer:
-        other_claims["iss"] = vcc.issuer
-    if vcc.subject and vcc.subject[0].id:
-        other_claims["sub"] = vcc.subject[0].id
-    if vcc.valid_until:
-        other_claims["exp"] = int(vcc.valid_until.timestamp())
-    if vcc.valid_from:
-        other_claims["iat"] = int(vcc.valid_from.timestamp())
-        other_claims["nbf"] = int(vcc.valid_from.timestamp())
-    if vcc.id:
-        other_claims["jti"] = vcc.id
-    payload: dict[str, Any] = {"vc": payload_data, **other_claims}
-    kid = f"{vcc.issuer}#{options.verification_method_key or 'key-1'}"
-    header = {"typ": "JWT", "alg": "ES256K", "kid": kid}
-    header_b64 = _b64url_json(header)
-    payload_b64 = _b64url_json(payload)
-    signing_input = header_b64 + "." + payload_b64
-    cred = ParsedJWTCredential(signing_input, payload_data, other_claims)
-    _execute_options(payload_data, list(opts))
-    return cred
+def new_jwt_credential(vcc: CredentialContents, *opts: CredentialOpt) -> Any:
+    from credential.vc.jwt_credential import JWTCredential
+
+    return JWTCredential.create(vcc, *opts)
 
 
 def _b64url_json(obj: dict[str, Any]) -> str:
@@ -476,10 +425,9 @@ def parse_credential(raw_credential: bytes | str, *opts: CredentialOpt) -> Crede
             base_jwt = val_str.split("~", 1)[0]
         parts = base_jwt.split(".")
         if len(parts) >= 2:
-            header_bytes = base64.urlsafe_b64decode(parts[0] + "=" * ((4 - len(parts[0]) % 4) % 4))
             try:
-                header = json.loads(header_bytes)
-            except json.JSONDecodeError:
+                header = json.loads(b64url_decode(parts[0]))
+            except ValueError:  # unreadable header: fall through to the VC 1.1 path
                 header = {}
             if isinstance(header, dict):
                 typ = header.get("typ")
@@ -495,19 +443,20 @@ def parse_credential(raw_credential: bytes | str, *opts: CredentialOpt) -> Crede
     raise ValueError("failed to parse credential: not a valid JSON, SD-JWT, or JWT credential")
 
 
-def _parse_jose_credential(token: str, *opts: CredentialOpt) -> Credential:
+def _parse_jose_credential(token: str, *opts: CredentialOpt) -> Any:
     from credential.vc.jose_credential import JOSECredential
 
-    inner = JOSECredential.parse(token)
-    payload = inner.payload()
-    if not isinstance(payload, dict):
-        raise ValueError("invalid JOSE credential payload")
-    helper.require_credential_properties(payload)
-    cred = ParsedJWTCredential("", payload, payload)
-    _execute_options(payload, list(opts))
-    return cred
+    return JOSECredential.parse(token, *opts)
 
 
 def parse_credential_with_validation(raw_credential: bytes | str) -> Credential:
     return parse_credential(raw_credential, with_schema_validation(), with_verify_proof())
 
+
+
+def __getattr__(name: str):  # PEP 562: ParsedJSONCredential is the JSON-LD credential (kept for old imports)
+    if name == "ParsedJSONCredential":
+        from credential.vc.json_credential import JSONCredential
+
+        return JSONCredential
+    raise AttributeError(name)

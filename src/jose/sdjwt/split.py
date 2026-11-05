@@ -7,8 +7,9 @@ from jose.sdjwt.limits import MAX_BYTES, MAX_DISCLOSURES
 
 
 def split(compact: str) -> tuple[str, list[str], str]:
-    if len(compact) > MAX_BYTES:
-        raise ErrMalformed(f"sdjwt: SD-JWT of {len(compact)} bytes, at most {MAX_BYTES}")
+    size = len(compact.encode("utf-8", "surrogatepass"))
+    if size > MAX_BYTES:
+        raise ErrMalformed(f"sdjwt: SD-JWT of {size} bytes, at most {MAX_BYTES}")
     tildes = compact.count("~")
     if tildes == 0:
         raise ErrMalformed("sdjwt: no ~ separator")

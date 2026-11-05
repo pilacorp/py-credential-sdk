@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-from didv2.did.jsoncanonicalizer import transform
-from didv2.keccak import keccak256_hex
+from didv2.did.did import hash_did_document, rfc3339_nano
 
 DID_TYPE_PEOPLE = 0
 DID_TYPE_ITEM = 1
@@ -51,10 +49,7 @@ class DIDDocument:
         return out
 
     def hash(self) -> str:
-        if not self.id:
-            raise ValueError("DID document is nil")
-        raw = json.dumps(self.to_dict(), separators=(",", ":"), ensure_ascii=True).encode("utf-8")
-        return keccak256_hex(transform(raw)).lower()
+        return hash_did_document(self.to_dict())
 
 
 def _vm_to_dict(vm: VerificationMethod) -> dict[str, Any]:
@@ -70,7 +65,7 @@ def _vm_to_dict(vm: VerificationMethod) -> dict[str, Any]:
     if vm.public_key_multibase:
         out["publicKeyMultibase"] = vm.public_key_multibase
     if vm.revoked is not None:
-        out["revoked"] = vm.revoked.isoformat().replace("+00:00", "Z")
+        out["revoked"] = rfc3339_nano(vm.revoked)
     if vm.revocation_reason:
         out["revocationReason"] = vm.revocation_reason
     return out

@@ -6,7 +6,6 @@ from typing import Any, Protocol
 from cryptography.hazmat.primitives.asymmetric import ec
 
 from credential.common.dto.proof import Proof
-from credential.common.verification_method.key_material import ec_pub_from_vm
 from credential.common.verification_method.verification_method import DIDDocument
 
 from credential.common.jsonmap._constants import DATA_INTEGRITY_PROOF, ECDSA_SD_2023, PROOF_FIELD
@@ -19,9 +18,8 @@ from credential.common.jsonmap._proof_helpers import (
     parse_raw_to_proof,
     set_single_proof,
     strict_purpose_check,
-    vm_entry_to_dict,
 )
-from didv2.did.verification_method_ops import find_verification_method
+from credential.common.jsonmap._vm import find_vm_entry, pub_from_entry
 
 try:
     from credential.common.ecdsasd import create_base_proof as _create_base_proof
@@ -122,18 +120,16 @@ def find_ecdsasd_proof(m: dict[str, Any]) -> Proof | None:
 def verify_ecdsasd_proof(m: dict[str, Any], doc: DIDDocument, proof: Proof) -> bool:
     if _verify_proof is None:
         raise NotImplementedError("credential.common.ecdsasd.verify_proof is not available")
-
-    doc_dict = {
-        "id": doc.id,
-        "verificationMethod": [vm_entry_to_dict(v) for v in doc.verification_method],
-    }
-    vm_raw = find_verification_method(doc_dict, proof.verification_method)
-    if vm_raw is None:
-        raise ValueError(f"failed to resolve verification method: {proof.verification_method!r}")
-    pub = ec_pub_from_vm(vm_raw)
+    try:
+        vm = find_vm_entry(doc, proof.verification_method)
+    except ValueError as exc:
+        raise ValueError(f"failed to resolve verification method: {exc}") from exc
+    pub = pub_from_entry(vm)
     doc_no_proof = body_without_proof(m)
-    proof_config = ecdsa_proof_config(m, proof)
+    try:
+        proof_config = ecdsa_proof_config(m, proof)
+    except ValueError as exc:
+        raise ValueError(f"failed to build proof configuration: {exc}") from exc
     _verify_proof(doc_no_proof, proof_config, proof.proof_value, pub)
-    vm_entry = next(v for v in doc.verification_method if v.id == vm_raw.get("id"))
-    strict_purpose_check(doc, vm_entry, proof.proof_purpose, proof.created)
+    strict_purpose_check(doc, vm, proof.proof_purpose, proof.created)
     return True

@@ -5,7 +5,19 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
+from credential.common.verification_method import StaticResolver, new_did_document, new_secp256k1_vm
 from credential.vc import credential_helper as helper
+from didv2.signer import DefaultProvider
+
+# A deterministic secp256k1 public key, only ever used to resolve a VM for tests that
+# build an unsigned JWTCredential and inspect its fields (never actually signed with).
+_ISSUER_PRIV_HEX = "57600b3f2b7e1054094e14cd85c72a40dc74c4ee062bb381cea604b55ce56aec"
+_ISSUER_PUB_HEX = "04" + DefaultProvider(_ISSUER_PRIV_HEX)._key.public_key.to_bytes().hex()  # noqa: SLF001
+
+
+def _static_resolver_for(issuer: str) -> StaticResolver:
+    return StaticResolver([new_did_document(issuer, [new_secp256k1_vm(issuer, "key-1", _ISSUER_PUB_HEX)])])
+
 from credential.vc.credential import (
     CredentialContents,
     ParsedJSONCredential,
@@ -439,7 +451,9 @@ def test_extract_field():
         valid_from=datetime.now(timezone.utc),
         valid_until=datetime.now(timezone.utc) + timedelta(hours=24),
     )
-    jwt_cred = new_jwt_credential(vcc, with_verification_method_key("key-1"))
+    jwt_cred = new_jwt_credential(
+        vcc, with_verification_method_key("key-1"), with_resolver(_static_resolver_for(vcc.issuer))
+    )
     assert jwt_cred.extract_field("credentialSubject.name") == "Alice"
     assert jwt_cred.extract_field("credentialSubject.address.city") == "HoChiMinh"
     assert jwt_cred.extract_field("credentialSubject.email") is None
@@ -531,7 +545,9 @@ def test_serialize_credential_contents_terms_of_use():
 
     vcc = _base_contents()
     vcc.terms_of_use = [TermsOfUse(type="PresentationRequiredPolicy")]
-    cred = new_jwt_credential(vcc, with_verification_method_key("key-1"))
+    cred = new_jwt_credential(
+        vcc, with_verification_method_key("key-1"), with_resolver(_static_resolver_for(vcc.issuer))
+    )
     import json as json_mod
 
     payload = json_mod.loads(cred.get_contents())

@@ -29,6 +29,13 @@ class Receipt:
     tx_hash: str = ""
 
 
+def _drop_empty(d: dict, *keys: str) -> dict:
+    for k in keys:
+        if not d[k]:
+            del d[k]
+    return d
+
+
 @dataclass
 class StoredBatch:
     issuer_did: str
@@ -44,6 +51,14 @@ class StoredBatch:
     created_at_unix: int = 0
     last_modified_unix: int = 0
 
+    def to_dict(self) -> dict:
+        """Go json tags (tx_hash / anchored_at_unix are omitempty)."""
+        return _drop_empty(dict(self.__dict__), "tx_hash", "anchored_at_unix")
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "StoredBatch":
+        return cls(**{k: d[k] for k in cls.__dataclass_fields__ if k in d})
+
 
 @dataclass
 class Batch:
@@ -55,6 +70,16 @@ class Batch:
     leaves_digest: str
     leaves: list[bytes] = field(repr=False)
     leaves_by_hash: dict[bytes, int] = field(repr=False)
+
+    def to_dict(self) -> dict:
+        return {
+            "issuer_did": self.issuer_did,
+            "external_tree_id": self.external_tree_id,
+            "root": self.root,
+            "leaf_count": self.leaf_count,
+            "hash_scheme": self.hash_scheme,
+            "leaves_digest": self.leaves_digest,
+        }
 
     def receipt(self, vc_hash: str, tx_hash: str = "") -> Receipt:
         normalized, raw = normalize_hash32(vc_hash)

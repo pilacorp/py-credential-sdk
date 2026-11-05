@@ -6,16 +6,16 @@ from typing import Any
 
 @dataclass
 class StatusListCredentialSubject:
-    encoded_list: str
-    id: str
-    status_purpose: str
-    type: str
+    encoded_list: str = ""
+    id: str = ""
+    status_purpose: str = ""
+    type: str = ""
 
 
 @dataclass
 class StatusListCredential:
     context: list[str] = field(default_factory=list)
-    credential_subject: StatusListCredentialSubject | None = None
+    credential_subject: StatusListCredentialSubject = field(default_factory=StatusListCredentialSubject)
     id: str = ""
     issuer: str = ""
     proof: dict[str, Any] = field(default_factory=dict)
@@ -26,4 +26,4 @@ class StatusListCredential:
 
 @dataclass
 class StatusListCredentialResponse:
-    data: StatusListCredential
+    data: StatusListCredential = field(default_factory=StatusListCredential)

@@ -20,12 +20,16 @@ class Manager:
         return stored
 
     def mark_anchored(self, issuer_did: str, external_tree_id: str, tx_hash: str) -> None:
+        if self.store is None:
+            raise ValueError("store is required")
         if not tx_hash:
             raise ValueError("tx hash is required")
         stored = self._get(issuer_did, external_tree_id)
         self.store.mark_anchored(stored.issuer_did, stored.external_tree_id, tx_hash)
 
     def generate_receipt(self, issuer_did: str, external_tree_id: str, vc_hash: str) -> Receipt:
+        if self.store is None:
+            raise ValueError("store is required")
         stored = self._get(issuer_did, external_tree_id)
         if not stored.tx_hash:
             raise ValueError(f"batch {external_tree_id} is not anchored")
@@ -36,6 +40,8 @@ class Manager:
         return batch.receipt(vc_hash, stored.tx_hash)
 
     def validate_stored_batch(self, issuer_did: str, external_tree_id: str) -> None:
+        if self.store is None:
+            raise ValueError("store is required")
         stored = self._get(issuer_did, external_tree_id)
         batch = build_batch(
             BatchInput(stored.issuer_did, stored.external_tree_id, stored.ordered_vc_hashes)
@@ -47,8 +53,8 @@ def _ensure_matches(batch: Batch, stored: StoredBatch) -> None:
     if batch.root != stored.root:
         raise ValueError(f"stored batch root mismatch: got {batch.root} want {stored.root}")
     if batch.leaf_count != stored.leaf_count:
-        raise ValueError("stored batch leaf_count mismatch")
+        raise ValueError(f"stored batch leaf_count mismatch: got {batch.leaf_count} want {stored.leaf_count}")
     if batch.hash_scheme != stored.hash_scheme:
-        raise ValueError("stored batch hash_scheme mismatch")
+        raise ValueError(f"stored batch hash_scheme mismatch: got {batch.hash_scheme} want {stored.hash_scheme}")
     if batch.leaves_digest != stored.leaves_digest:
-        raise ValueError("stored batch leaves_digest mismatch")
+        raise ValueError(f"stored batch leaves_digest mismatch: got {batch.leaves_digest} want {stored.leaves_digest}")

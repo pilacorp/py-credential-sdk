@@ -18,7 +18,7 @@ SD_ALG_SHA256 = "sha-256"
 
 @dataclass
 class Disclosure:
-    salt: str
+    salt: str = ""
     name: str = ""
     value: Any = None
     array_element: bool = False
@@ -58,4 +58,4 @@ def reserved(name: str) -> bool:
 
 
 def digest_of(s: str) -> str:
-    return jose_b64.encode_segment(hashlib.sha256(s.encode("ascii")).digest())
+    return jose_b64.encode_segment(hashlib.sha256(s.encode("utf-8", "surrogatepass")).digest())

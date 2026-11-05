@@ -4,9 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from cryptography.hazmat.primitives.asymmetric import ec as crypto_ec
-from eth_keys import keys as eth_keys
-
 from jose import base64 as jose_b64
 from jose.errors import ErrUnsupportedKey
 from jose.internal.ec import Kind, Point, from_public_key as ec_from_public_key
@@ -114,11 +111,5 @@ def _kind_for_crv(crv: str) -> Kind | None:
 
 
 def _point_to_crypto_key(pt: Point) -> Any:
-    if pt.kind is Kind.P256:
-        nums = crypto_ec.EllipticCurvePublicNumbers(
-            int.from_bytes(pt.x, "big"),
-            int.from_bytes(pt.y, "big"),
-            crypto_ec.SECP256R1(),
-        )
-        return nums.public_key()
-    return eth_keys.PublicKey(pt.uncompressed())
+    # A cryptography EC public key on either curve (Go: *ecdsa.PublicKey, on secp256k1.S256() for secp256k1).
+    return pt.public_key()

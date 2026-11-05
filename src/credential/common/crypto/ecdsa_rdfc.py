@@ -1,69 +1,60 @@
+"""ECDSA verification helpers (Go credential/common/crypto/ecdsa-rdfc-2019.go, ecdsa-sd-2023.go)."""
+
 from __future__ import annotations
 
-from hashlib import sha256
-from typing import Any
-
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
+from cryptography.hazmat.primitives.asymmetric.utils import Prehashed, encode_dss_signature
+from eth_keys import keys as eth_keys_mod
 
-from credential.common.dto.proof import Proof, proof_from_map
-from credential.common.processor import canonicalize_document
-from credential.common.signer.p256 import verify_p256
+_PREHASHED = ec.ECDSA(Prehashed(hashes.SHA256()))
 
 
-def verify_ecdsa(pub: ec.EllipticCurvePublicKey, digest: bytes, sig: bytes) -> bool:
-    if len(sig) == 65:
-        sig = sig[:64]
-    if len(sig) != 64 or len(digest) != 32:
+def _verify_rs(pub: ec.EllipticCurvePublicKey | eth_keys_mod.PublicKey, digest: bytes, sig64: bytes) -> bool:
+    if len(digest) != 32:
         return False
-    nums = pub.public_numbers()
-    uncompressed = b"\x04" + nums.x.to_bytes(32, "big") + nums.y.to_bytes(32, "big")
-    return verify_p256(uncompressed, digest, sig)
-
-
-def ecdsa_verify_signature(pub: ec.EllipticCurvePublicKey, signature_hex: str, msg: bytes) -> bool:
-    sig_bytes = bytes.fromhex(signature_hex[2:] if signature_hex.startswith("0x") else signature_hex)
-    if len(sig_bytes) == 65:
-        sig_bytes = sig_bytes[:64]
-    if len(sig_bytes) != 64:
-        return False
-    r = int.from_bytes(sig_bytes[:32], "big")
-    s = int.from_bytes(sig_bytes[32:], "big")
+    r = int.from_bytes(sig64[:32], "big")
+    s = int.from_bytes(sig64[32:], "big")
+    if isinstance(pub, eth_keys_mod.PublicKey):
+        try:
+            return bool(eth_keys_mod.Signature(vrs=(0, r, s)).verify_msg_hash(digest, pub))
+        except Exception:
+            return False
     try:
-        pub.verify(encode_dss_signature(r, s), msg, ec.ECDSA(prehashed=None))
+        pub.verify(encode_dss_signature(r, s), digest, _PREHASHED)
         return True
     except Exception:
         return False
 
 
-def verify_ecdsa_rdfc_proof(
-    document: dict[str, Any], proof: Proof | dict[str, Any], pub: ec.EllipticCurvePublicKey
-) -> bool:
-    if isinstance(proof, dict):
-        proof = proof_from_map(proof)
-    body = {k: v for k, v in document.items() if k != "proof"}
-    doc_canon = canonicalize_document(body)
-    doc_hash = sha256(doc_canon).digest()
-
-    cfg = proof.to_map()
-    cfg.pop("proofValue", None)
-    cfg.pop("jws", None)
-    ctx = document.get("@context")
-    if ctx is None:
+def verify_p256(pub: ec.EllipticCurvePublicKey, digest: bytes, sig: bytes) -> bool:
+    """Go VerifyP256: 64-byte r||s over a 32-byte digest; high-S accepted."""
+    if pub is None or len(sig) != 64:
         return False
-    cfg["@context"] = ctx
-    cfg_canon = canonicalize_document(cfg)
-    proof_cfg_hash = sha256(cfg_canon).digest()
-    hash_data = proof_cfg_hash + doc_hash
-    digest = sha256(hash_data).digest()
+    return _verify_rs(pub, digest, sig)
 
-    proof_value = proof.proof_value
-    if proof_value.startswith("z"):
-        from credential.common.verification_method.key_material import decode_multibase_key
 
-        sig = decode_multibase_key(proof_value)
-    else:
-        sig = bytes.fromhex(proof_value[2:] if proof_value.startswith("0x") else proof_value)
+def verify_ecdsa(pub: ec.EllipticCurvePublicKey | eth_keys_mod.PublicKey, digest: bytes, sig: bytes) -> bool:
+    """Go VerifyECDSA: verifies with the key's own curve; a trailing recovery byte (65 bytes) is dropped."""
+    if pub is None:
+        return False
+    if len(sig) == 65:
+        sig = sig[:64]
     if len(sig) != 64:
         return False
-    return verify_ecdsa(pub, digest, sig)
+    return _verify_rs(pub, digest, sig)
+
+
+def ecdsa_verify_signature(pub: ec.EllipticCurvePublicKey, signature_hex: str, msg: bytes) -> bool:
+    """Go ECDSAVerifySignature: hex r||s[||v] over ``msg`` taken as the digest itself (legacy hex proofs)."""
+    if pub is None:
+        raise ValueError("public key is nil")
+    try:
+        sig_bytes = bytes.fromhex(signature_hex)
+    except ValueError as exc:
+        raise ValueError(f"failed to decode signature: {exc}") from exc
+    if len(sig_bytes) == 65:
+        sig_bytes = sig_bytes[:64]
+    elif len(sig_bytes) != 64:
+        raise ValueError(f"invalid signature length: got {len(sig_bytes)}, want 64 or 65 bytes")
+    return _verify_rs(pub, msg, sig_bytes)

@@ -92,7 +92,7 @@ def recreate(payload: dict[str, Any], disclosures: list[Disclosure]) -> Recreate
             raise ErrMalformed(f"sdjwt: disclosure {digest} given twice")
         r.by_digest[digest] = given.encoded
         r.order.append(digest)
-    claims, issued, err = r.object(payload, _At())
+    claims, issued, err = r.object(payload, _At(node=0))  # node 0 is the payload
     if err:
         raise err
     for digest in r.order:
@@ -159,9 +159,9 @@ class _Recreator:
             out[k] = v
             assert node.fields is not None
             node.fields[k] = n
-        sd = obj.get(KEY_SD)
-        if sd is None:
+        if KEY_SD not in obj:
             return out, node, None
+        sd = obj[KEY_SD]
         if not isinstance(sd, list):
             return {}, Node(), ErrMalformed(f"sdjwt: _sd at {a.path()} is not an array")
         for item in sd:

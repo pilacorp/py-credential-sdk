@@ -1,5 +1,6 @@
 from credential.common.credential_status.credential_status import (
     Client,
+    decode_bitstring,
     fetch_and_check_revocation,
     is_revoked,
 )
@@ -14,6 +15,7 @@ __all__ = [
     "StatusListCredential",
     "StatusListCredentialResponse",
     "StatusListCredentialSubject",
+    "decode_bitstring",
     "fetch_and_check_revocation",
     "is_revoked",
 ]

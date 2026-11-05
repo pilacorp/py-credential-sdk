@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from urllib.parse import urlparse
 import ipaddress
 
-from digitalcredential.internal.safehttp import https_url, port as url_port
+from digitalcredential.internal import safehttp
+from digitalcredential.internal.safehttp import hostname, https_url, parse, port as url_port
 
 
 @dataclass
@@ -23,7 +23,7 @@ def check(e: str, hints: Hints | None = None) -> str:
     hints = hints or Hints()
     if e == "*":
         return f'is "*", which is not an entry; to cover every https origin, {hints.all}'
-    if len(e) < len("https://") or not e[: len("https://")].lower() == "https://":
+    if len(e) < len("https://") or not (e[:8].isascii() and e[:8].lower() == "https://"):
         return 'does not start with https://; list origins as "https://host" or "https://*.host"'
     o = _parse_origin_entry(e)
     if o is None:
@@ -59,22 +59,25 @@ def _ipv6_host(host: str) -> bool:
 
 
 def _plain_port(port: str) -> bool:
-    if not port.isdigit():
+    if not port or not all("0" <= c <= "9" for c in port):
         return False
     n = int(port)
     return 1 <= n <= 65535 and port == str(n)
+
+
+def _ascii_lower(s: str) -> str:
+    """RFC 6454 §4 i;ascii-casemap: A-Z only."""
+    return "".join(chr(ord(c) + 32) if "A" <= c <= "Z" else c for c in s)
 
 
 def _parse_origin_entry(e: str) -> _Origin | None:
     sub = e[len("https://") :].startswith("*.")
     if sub:
         e = "https://" + e[len("https://*.") :]
-    if "*" in e and not sub:
+    u = parse(e)
+    if u is None or not https_url(u) or u.path not in ("", "/") or any(c in e for c in "?#*"):
         return None
-    u = urlparse(e)
-    if not https_url(e) or (u.path not in ("", "/")) or "?" in e or "#" in e:
-        return None
-    return _Origin(host=(u.hostname or "").lower(), port=url_port(u), subdomain=sub)
+    return _Origin(host=_ascii_lower(hostname(u)), port=url_port(u), subdomain=sub)
 
 
 @dataclass
@@ -93,13 +96,14 @@ class List:
         if self.origins is None:
             self.origins = []
 
-    def covers(self, raw: str) -> bool:
+    def covers(self, raw) -> bool:
+        """Whether the list covers u, an https URL (str or urlsplit result)."""
         if self.any_origin:
             return True
-        u = urlparse(raw)
-        if not https_url(raw):
+        u = parse(raw) if isinstance(raw, str) else raw
+        if u is None or not https_url(u):
             return False
-        host = (u.hostname or "").lower()
+        host = _ascii_lower(hostname(u))
         p = url_port(u)
         for o in self.origins:
             if o.subdomain:
@@ -112,28 +116,24 @@ class List:
         return False
 
 
+def _parse_all(entries: list[str]) -> list[_Origin]:
+    return [o for e in entries if (o := _parse_origin_entry(e)) is not None]
+
+
 def new(entries: list[str]) -> List:
-    if not entries:
-        return List(any_origin=True)
-    origins: list[_Origin] = []
-    for e in entries:
-        o = _parse_origin_entry(e)
-        if o is not None:
-            origins.append(o)
-    return List(origins=origins)
-
-
-def redirects_to(entries: list[str]) -> Redirects:
-    origins = [_o for e in entries if (_o := _parse_origin_entry(e)) is not None]
-    return Redirects(to=List(origins=origins))
+    """A List of entries, each of which check() accepted. Empty covers every URL."""
+    return List(any_origin=not entries, origins=_parse_all(entries))
 
 
 @dataclass
 class Redirects:
+    """Where a retrieval follows a redirect: always within the origin of the URL requested;
+    redirects_to adds the origins of a list, redirects_any every https URL."""
+
     any_origin: bool = False
     to: List | None = None
 
-    def follows(self, start: str, target: str) -> bool:
+    def follows(self, start, target) -> bool:
         if self.any_origin:
             return True
         if _same_origin(start, target):
@@ -141,10 +141,16 @@ class Redirects:
         return self.to is not None and self.to.covers(target)
 
 
+def redirects_to(entries: list[str]) -> Redirects:
+    """Unlike new(), no entries adds nothing."""
+    return Redirects(to=List(origins=_parse_all(entries)))
+
+
 def redirects_any() -> Redirects:
     return Redirects(any_origin=True)
 
 
-def _same_origin(a: str, b: str) -> bool:
-    ua, ub = urlparse(a), urlparse(b)
-    return (ua.hostname or "").lower() == (ub.hostname or "").lower() and url_port(ua) == url_port(ub)
+def _same_origin(a, b) -> bool:
+    ua = parse(a) if isinstance(a, str) else a
+    ub = parse(b) if isinstance(b, str) else b
+    return _ascii_lower(hostname(ua)) == _ascii_lower(hostname(ub)) and url_port(ua) == url_port(ub)

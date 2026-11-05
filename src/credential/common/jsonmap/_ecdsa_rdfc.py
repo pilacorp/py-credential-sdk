@@ -8,7 +8,6 @@ from cryptography.hazmat.primitives.asymmetric import ec
 
 from credential.common.crypto.ecdsa_rdfc import ecdsa_verify_signature, verify_ecdsa
 from credential.common.dto.proof import Proof, StringOrStrings
-from credential.common.verification_method.key_material import ec_pub_from_vm
 from credential.common.verification_method.verification_method import DIDDocument
 
 from credential.common.jsonmap._constants import (
@@ -23,8 +22,8 @@ from credential.common.jsonmap._ecdsa_common import (
 )
 from credential.common.jsonmap._multibase import decode_multibase_key, encode_multibase_key
 from credential.common.jsonmap._options import ProofOptions, SignerProvider, domain_value, new_proof_options
-from credential.common.jsonmap._proof_helpers import append_proof, strict_purpose_check, vm_entry_to_dict
-from didv2.did.verification_method_ops import find_verification_method
+from credential.common.jsonmap._proof_helpers import append_proof, strict_purpose_check
+from credential.common.jsonmap._vm import find_vm_entry, pub_from_entry
 
 
 def add_ecdsa_proof(
@@ -35,6 +34,8 @@ def add_ecdsa_proof(
     *,
     options: ProofOptions | None = None,
 ) -> None:
+    if signer is None:
+        raise ValueError("jsonmap: signer provider cannot be nil")
     if not verification_method:
         raise ValueError("jsonmap: verification method is required")
     if not proof_purpose:
@@ -76,18 +77,25 @@ def add_ecdsa_proof(
         raise
 
 
-def verify_ecdsa_rdfc(m: dict[str, Any], pub: ec.EllipticCurvePublicKey, proof: Proof) -> bool:
+def verify_ecdsa_rdfc(m: dict[str, Any], pub: Any, proof: Proof) -> bool:
+    """A "z" proofValue selects the spec-conformant path (P-256 only); anything else the legacy hex path
+    (secp256k1/P-256 proofs issued by SDK <= v1.7.0, which also carry cryptosuite ecdsa-rdfc-2019)."""
     pv = proof.proof_value
     if pv.startswith(MULTIBASE_BASE58_BTC_PREFIX):
-        if not isinstance(pub.curve, ec.SECP256R1):
+        if not (isinstance(pub, ec.EllipticCurvePublicKey) and isinstance(pub.curve, ec.SECP256R1)):
+            name = pub.curve.name if isinstance(pub, ec.EllipticCurvePublicKey) else "secp256k1"
             raise ValueError(
-                f'ecdsa-rdfc-2019: verification method {proof.verification_method!r} uses curve '
-                f"{pub.curve.name if hasattr(pub.curve, 'name') else pub.curve!r}, "
-                "but this SDK supports P-256 only"
+                f"ecdsa-rdfc-2019: verification method {proof.verification_method!r} uses curve "
+                f"{name!r}, but this SDK supports P-256 only"
             )
         return _verify_ecdsa_spec_conformant(m, pub, proof)
 
-    doc = legacy_hex_canonicalize(m)
+    # Legacy hex proofs sign the body only, so challenge and domain are NOT covered; verifiers
+    # must prevent replay themselves.
+    try:
+        doc = legacy_hex_canonicalize(m)
+    except ValueError as exc:
+        raise ValueError(f"failed to canonicalize JSONMap: {exc}") from exc
     return ecdsa_verify_signature(pub, pv, doc)
 
 
@@ -104,19 +112,12 @@ def _verify_ecdsa_spec_conformant(m: dict[str, Any], pub: ec.EllipticCurvePublic
 
 
 def verify_data_integrity_proof(m: dict[str, Any], doc: DIDDocument, proof: Proof) -> bool:
-    doc_dict = {
-        "id": doc.id,
-        "verificationMethod": [vm_entry_to_dict(v) for v in doc.verification_method],
-    }
-    vm_raw = find_verification_method(doc_dict, proof.verification_method)
-    if vm_raw is None:
-        raise ValueError(f"failed to resolve verification method: {proof.verification_method!r}")
-    pub = ec_pub_from_vm(vm_raw)
-    if not isinstance(pub, ec.EllipticCurvePublicKey):
-        raise ValueError("verification method is not P-256")
-    ok = verify_ecdsa_rdfc(m, pub, proof)
-    if not ok:
+    try:
+        vm = find_vm_entry(doc, proof.verification_method)
+    except ValueError as exc:
+        raise ValueError(f"failed to resolve verification method: {exc}") from exc
+    pub = pub_from_entry(vm)
+    if not verify_ecdsa_rdfc(m, pub, proof):
         return False
-    vm_entry = next(v for v in doc.verification_method if v.id == vm_raw.get("id"))
-    strict_purpose_check(doc, vm_entry, proof.proof_purpose, proof.created)
+    strict_purpose_check(doc, vm, proof.proof_purpose, proof.created)
     return True

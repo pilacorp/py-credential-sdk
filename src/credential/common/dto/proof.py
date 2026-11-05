@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -15,8 +14,8 @@ class StringOrStrings:
             return cls([])
         if isinstance(data, str):
             return cls([data])
-        if isinstance(data, list):
-            return cls([str(x) for x in data])
+        if isinstance(data, list) and all(isinstance(x, str) for x in data):
+            return cls(list(data))
         raise TypeError("domain/previousProof must be string or list of strings")
 
     def to_json(self) -> Any:
@@ -68,60 +67,43 @@ class Proof:
         return out
 
 
+_STRING_FIELDS = {
+    "id": "id",
+    "type": "type",
+    "created": "created",
+    "expires": "expires",
+    "verificationMethod": "verification_method",
+    "proofPurpose": "proof_purpose",
+    "cryptosuite": "cryptosuite",
+    "challenge": "challenge",
+    "nonce": "nonce",
+    "proofValue": "proof_value",
+    "jws": "jws",
+}
+_SET_FIELDS = {"domain": "domain", "previousProof": "previous_proof"}
+
+
 def proof_from_map(m: dict[str, Any]) -> Proof:
+    """Build a Proof; a property lands in its typed field only when the value fits the
+    field's type (string / string-or-set-of-strings), else it is kept verbatim in
+    ``extra`` so the proof configuration hashed at verification still matches the signer's.
+    JSON null for a typed field means "not set" and is dropped (Go json semantics)."""
     p = Proof()
-    known = {
-        "id",
-        "type",
-        "created",
-        "expires",
-        "verificationMethod",
-        "proofPurpose",
-        "cryptosuite",
-        "challenge",
-        "domain",
-        "nonce",
-        "previousProof",
-        "proofValue",
-        "jws",
-    }
     for key, value in m.items():
-        raw = json.dumps({key: value})
-        try:
-            obj = json.loads(raw)
-            if key in known:
-                _apply_field(p, key, obj[key])
-            else:
-                p.extra[key] = value
-        except Exception:
-            p.extra[key] = value
+        if key in _STRING_FIELDS:
+            if value is None:
+                continue
+            if isinstance(value, str):
+                setattr(p, _STRING_FIELDS[key], value)
+                continue
+        elif key in _SET_FIELDS:
+            if value is None:
+                continue
+            if isinstance(value, str):
+                setattr(p, _SET_FIELDS[key], StringOrStrings([value]))
+                continue
+            if isinstance(value, list) and all(isinstance(x, str) for x in value):
+                setattr(p, _SET_FIELDS[key], StringOrStrings(list(value)))
+                continue
+        p.extra[key] = value
     return p
-
-
-def _apply_field(p: Proof, key: str, value: Any) -> None:
-    if key == "id":
-        p.id = str(value)
-    elif key == "type":
-        p.type = str(value)
-    elif key == "created":
-        p.created = str(value)
-    elif key == "expires":
-        p.expires = str(value)
-    elif key == "verificationMethod":
-        p.verification_method = str(value)
-    elif key == "proofPurpose":
-        p.proof_purpose = str(value)
-    elif key == "cryptosuite":
-        p.cryptosuite = str(value)
-    elif key == "challenge":
-        p.challenge = str(value)
-    elif key == "domain":
-        p.domain = StringOrStrings.from_json(value)
-    elif key == "nonce":
-        p.nonce = str(value)
-    elif key == "previousProof":
-        p.previous_proof = StringOrStrings.from_json(value)
-    elif key == "proofValue":
-        p.proof_value = str(value)
-    elif key == "jws":
-        p.jws = str(value)
