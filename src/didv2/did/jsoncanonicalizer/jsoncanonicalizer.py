@@ -15,10 +15,13 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from decimal import Decimal
 from typing import Any
 
 MAX_DEPTH = 200
+
+_LONE_SURROGATE = re.compile("[\ud800-\udfff]")
 
 _ESCAPES = {'"': '\\"', "\\": "\\\\", "\b": "\\b", "\f": "\\f", "\n": "\\n", "\r": "\\r", "\t": "\\t"}
 
@@ -36,6 +39,13 @@ def _pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return out
 
 
+def _loads(text: str) -> Any:
+    try:
+        return json.loads(text, object_pairs_hook=_pairs, parse_constant=_reject_constant)
+    except RecursionError as exc:
+        raise ValueError("canonicalizer: nesting exceeds maximum depth") from exc
+
+
 def transform(value: Any) -> bytes:
     """Canonicalize JSON text (str/bytes) or an already-parsed JSON value."""
     if isinstance(value, (bytes, bytearray)):
@@ -43,9 +53,9 @@ def transform(value: Any) -> bytes:
             text = bytes(value).decode("utf-8")
         except UnicodeDecodeError as exc:
             raise ValueError("canonicalizer: input is not valid UTF-8") from exc
-        parsed = json.loads(text, object_pairs_hook=_pairs, parse_constant=_reject_constant)
+        parsed = _loads(text)
     elif isinstance(value, str):
-        parsed = json.loads(value, object_pairs_hook=_pairs, parse_constant=_reject_constant)
+        parsed = _loads(value)
     else:
         parsed = value
     if not isinstance(parsed, (dict, list)):
@@ -86,6 +96,9 @@ def _utf16_key(key: str) -> bytes:
 
 
 def _quote(s: str) -> str:
+    if _LONE_SURROGATE.search(s):
+        # a well-formed pair is a single astral code point in Python, so any surrogate here is unpaired
+        raise ValueError("canonicalizer: lone surrogate in string")
     out = ['"']
     for ch in s:
         esc = _ESCAPES.get(ch)
