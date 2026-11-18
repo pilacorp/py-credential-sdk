@@ -119,18 +119,33 @@ def _parse_response(raw: Any) -> StatusListCredentialResponse:
         valid_from=_str(data.get("validFrom"), "validFrom"),
         valid_until=_str(data.get("validUntil"), "validUntil"),
     )
-    return StatusListCredentialResponse(data=cred)
+    return StatusListCredentialResponse(data=cred, raw_data=data)
+
+
+MIN_BITSTRING_BYTES = 16 * 1024  # W3C Bitstring Status List §2.2: at least 131,072 entries
+PURPOSES = ("revocation", "suspension")
 
 
 def fetch_and_check_revocation(
-    status_list_credential_url: str, position: int, client: Client | None = None
+    status_list_credential_url: str,
+    position: int,
+    client: Client | None = None,
+    *,
+    verify: Callable[[StatusListCredentialResponse], None],
+    status_purpose: str = "revocation",
 ) -> bool:
+    """Fetch the list credential, call ``verify(resp)`` (it must raise unless the list credential's proof,
+    issuer and validity hold), then read the bit. ``verify`` is required: an unsigned list decides nothing."""
     resp = (client or Client()).fetch_status_list_credential(status_list_credential_url)
-    return is_revoked(position, resp.data.credential_subject)
+    verify(resp)
+    return is_revoked(position, resp.data.credential_subject, status_purpose)
 
 
 def decode_bitstring(encoded_list: str) -> bytes:
-    """base64url (no padding) -> gunzip, as Go util.DecompressFromBase64URL (size-capped)."""
+    """Multibase base64url (``u`` prefix, no padding) -> gunzip. A list without the prefix (the format
+    published before the prefix was written) is still read: gzip's base64 always starts ``H4sI``."""
+    if encoded_list.startswith("u"):
+        encoded_list = encoded_list[1:]
     compressed = b64url_decode(encoded_list)
     if not compressed:
         raise ValueError("EOF")
@@ -141,17 +156,25 @@ def decode_bitstring(encoded_list: str) -> bytes:
         raise ValueError(f"invalid gzip data: {exc}") from exc
     if len(out) > MAX_DECODED_BYTES:
         raise ValueError("decoded status list is too large")
+    if len(out) < MIN_BITSTRING_BYTES:
+        raise ValueError(f"status list has {len(out)} bytes, want at least {MIN_BITSTRING_BYTES} (Bitstring Status List §2.2)")
     return out
 
 
-def is_revoked(position: int, subject: StatusListCredentialSubject) -> bool:
-    """Whether the bit at `position` (LSB-first within each byte) is set in a revocation list."""
-    if subject.status_purpose != "revocation":
-        return False
+def is_revoked(position: int, subject: StatusListCredentialSubject, status_purpose: str = "revocation") -> bool:
+    """Whether the bit at ``position`` is set. Index 0 is the left-most bit, the high bit of the first byte
+    (Bitstring Status List §2.2). The list's statusPurpose must be the one asked for; any other, or an
+    unknown one, raises instead of reading as "not revoked"."""
+    if status_purpose not in PURPOSES:
+        raise ValueError(f"unsupported statusPurpose {status_purpose!r}")
+    if subject.status_purpose != status_purpose:
+        raise ValueError(
+            f"status list statusPurpose {subject.status_purpose!r} does not match the credential's {status_purpose!r}"
+        )
     byte_string = decode_bitstring(subject.encoded_list)
     max_position = len(byte_string) * 8 - 1
     if position < 0 or position > max_position:
         raise ValueError(
             f"position {position} is out of range for bitstring of length {len(byte_string)} (max position: {max_position})"
         )
-    return ((byte_string[position // 8] >> (position % 8)) & 1) == 1
+    return ((byte_string[position // 8] >> (7 - position % 8)) & 1) == 1

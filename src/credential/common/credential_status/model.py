@@ -27,3 +27,4 @@ class StatusListCredential:
 @dataclass
 class StatusListCredentialResponse:
     data: StatusListCredential = field(default_factory=StatusListCredential)
+    raw_data: dict[str, Any] = field(default_factory=dict, repr=False)  # the credential as served, for proof checks

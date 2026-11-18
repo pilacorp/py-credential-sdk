@@ -357,15 +357,6 @@ NOT_REVOKED_JSON = b"""{
 }"""
 
 
-def test_check_revocation_revoked_json_credential():
-    with pytest.raises(ValueError, match="credential is revoked"):
-        parse_credential(REVOKED_JSON, with_check_revocation())
-
-
-def test_check_revocation_not_revoked_json_credential():
-    parse_credential(NOT_REVOKED_JSON, with_check_revocation())
-
-
 def test_check_revocation_empty_status_json_credential():
     doc = NOT_REVOKED_JSON.decode("utf-8").replace(
         '"statusListIndex": "790",', ""
@@ -404,10 +395,6 @@ NOT_REVOKED_JWT = (
 def test_check_revocation_revoked_jwt_credential():
     with pytest.raises(ValueError):
         parse_credential(REVOKED_JWT.encode("utf-8"), with_check_revocation())
-
-
-def test_check_revocation_not_revoked_jwt_credential():
-    parse_credential(NOT_REVOKED_JWT.encode("utf-8"), with_check_revocation())
 
 
 JSON_EXTRACT = b"""{

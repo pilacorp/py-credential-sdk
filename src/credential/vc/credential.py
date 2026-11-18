@@ -98,6 +98,7 @@ class CredentialOptions:
     sd_decoys: list[Decoy] = field(default_factory=list)
     loaded_schema_loader: SchemaLoaderFunc | None = None
     resolver: ResolverProvider | None = None
+    status_client: Any = None  # credential_status.Client for status list credentials (default: HTTP)
     proof_verification_method: str = ""
     replace_proof: bool = False
 
@@ -167,6 +168,15 @@ def with_check_expiration() -> CredentialOpt:
 def with_leeway(delta: timedelta) -> CredentialOpt:
     def apply(opts: CredentialOptions) -> None:
         opts.leeway = max(delta, timedelta(0))
+
+    return apply
+
+
+def with_status_client(client: Any) -> CredentialOpt:
+    """Fetch status list credentials through ``client`` (credential_status.Client) instead of plain HTTP."""
+
+    def apply(opts: CredentialOptions) -> None:
+        opts.status_client = client
 
     return apply
 
@@ -266,16 +276,16 @@ def run_options(
             helper.validate_credential(credential_data, options)
         except Exception as exc:
             errors.append(f"validate credential: {exc}")
-    if not errors and options.is_check_revocation:
-        try:
-            helper.check_revocation(credential_data)
-        except Exception as exc:
-            errors.append(f"check revocation: {exc}")
     if not errors and options.is_verify_proof and verify_proof is not None:
         try:
             verify_proof()
         except Exception as exc:
             errors.append(f"verify proof: {exc}")
+    if not errors and options.is_check_revocation:
+        try:
+            helper.check_revocation(credential_data, options)
+        except Exception as exc:
+            errors.append(f"check revocation: {exc}")
     if errors:
         raise ValueError(f"credential verification failed: {errors[0]}")
     if options.is_check_expiration:

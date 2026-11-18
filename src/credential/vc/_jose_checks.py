@@ -110,15 +110,18 @@ def reject_build_time_options(o: Any) -> None:
         )
 
 
-def execute_common_options(payload_data: dict[str, Any], options: Any) -> None:
-    """Schema + revocation checks (Go runs them in an errgroup; first error wins)."""
+def execute_common_options(payload_data: dict[str, Any], options: Any, verify_proof: Any = None) -> None:
+    """Schema, proof, then revocation: the status list is fetched only for a credential whose proof holds,
+    so a forged credential cannot make the verifier call a URL the forger chose."""
     if options.is_validate_schema:
         try:
             helper.validate_credential(payload_data, options)
         except Exception as exc:
             raise ValueError(f"credential verification failed: validate credential: {exc}") from exc
+    if verify_proof is not None:
+        verify_proof()
     if options.is_check_revocation:
         try:
-            helper.check_revocation(payload_data)
+            helper.check_revocation(payload_data, options)
         except Exception as exc:
             raise ValueError(f"credential verification failed: check revocation: {exc}") from exc

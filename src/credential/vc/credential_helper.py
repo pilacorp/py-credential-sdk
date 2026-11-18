@@ -8,6 +8,7 @@ import jsonschema
 
 from credential.common.credential_status.credential_status import fetch_and_check_revocation
 from credential.common.util.json import shallow_copy_obj
+from credential.common.verification_method.verification_method import parse_rfc3339
 from credential.common.util.vc import map_slice, serialize_contexts, serialize_types
 
 CredentialData = dict[str, Any]
@@ -112,14 +113,14 @@ def check_validity_period(what: str, valid_from: str, valid_until: str, leeway: 
         leeway = timedelta(0)
     if valid_from:
         try:
-            start = datetime.fromisoformat(valid_from.replace("Z", "+00:00"))
+            start = parse_rfc3339(valid_from)
         except ValueError as exc:
             raise ValueError(f"failed to parse validFrom: {exc}") from exc
         if now + leeway < start:
             raise ValueError(f"{what} is not valid yet")
     if valid_until:
         try:
-            end = datetime.fromisoformat(valid_until.replace("Z", "+00:00"))
+            end = parse_rfc3339(valid_until)
         except ValueError as exc:
             raise ValueError(f"failed to parse validUntil: {exc}") from exc
         if now - leeway > end:
@@ -147,7 +148,40 @@ def check_expiration(c: CredentialData, leeway: timedelta) -> None:
     check_validity_period("credential", valid_from, valid_until, leeway)
 
 
-def check_revocation(c: CredentialData) -> None:
+def _issuer_id(c: CredentialData) -> str:
+    v = c.get("issuer")
+    if isinstance(v, dict):
+        v = v.get("id")
+    return v if isinstance(v, str) else ""
+
+
+def _status_list_index(raw: str) -> int:
+    # int() also takes " 5", "1_0" and non-ASCII digits
+    if not (raw.isascii() and raw.isdigit()):
+        raise ValueError("must be a non-negative decimal integer")
+    return int(raw)
+
+
+def _verify_status_list(resp: Any, c: CredentialData, options: Any) -> None:
+    """The list credential is trusted only as far as a credential: its proof must verify, it must be issued
+    by the issuer of the credential it serves, be a BitstringStatusListCredential and be within its validity."""
+    from credential.vc import credential as vc
+
+    lc = resp.data
+    if not _issuer_id(c) or lc.issuer != _issuer_id(c):
+        raise ValueError("status list credential issuer is not the credential's issuer")
+    if "BitstringStatusListCredential" not in lc.type:
+        raise ValueError("status list credential type is not BitstringStatusListCredential")
+    if lc.credential_subject.type != "BitstringStatusList":
+        raise ValueError("status list credentialSubject type is not BitstringStatusList")
+    check_validity_period("status list credential", lc.valid_from, lc.valid_until, timedelta(0))
+    opts = [vc.with_verify_proof()]
+    if options is not None:
+        opts += [vc.with_resolver(options.resolver), vc.with_base_url(options.did_base_url)]
+    vc.parse_credential(json.dumps(resp.raw_data).encode("utf-8"), *opts)
+
+
+def check_revocation(c: CredentialData, options: Any = None) -> None:
     if "credentialStatus" not in c or c["credentialStatus"] is None:
         return
     raw_status = c["credentialStatus"]
@@ -166,15 +200,24 @@ def check_revocation(c: CredentialData) -> None:
     if not isinstance(raw_index, str) or not raw_index:
         raise ValueError("credentialStatus.statusListIndex must be a non-empty string")
     try:
-        position = int(raw_index)
+        position = _status_list_index(raw_index)
     except ValueError as exc:
         raise ValueError(f"invalid credentialStatus.statusListIndex: {exc}") from exc
+    purpose = raw_status.get("statusPurpose") or "revocation"
+    if not isinstance(purpose, str):
+        raise ValueError("credentialStatus.statusPurpose must be a string")
     try:
-        is_revoked = fetch_and_check_revocation(raw_list_cred, position)
+        is_revoked = fetch_and_check_revocation(
+            raw_list_cred,
+            position,
+            getattr(options, "status_client", None),
+            verify=lambda resp: _verify_status_list(resp, c, options),
+            status_purpose=purpose,
+        )
     except Exception as exc:
         raise ValueError(f"failed to check revocation: {exc}") from exc
     if is_revoked:
-        raise ValueError("credential is revoked")
+        raise ValueError(f"credential is {'revoked' if purpose == 'revocation' else 'suspended'}")
 
 
 def serialize_subject(subject: dict[str, Any]) -> CredentialData:
@@ -421,10 +464,10 @@ def parse_issuer(c: CredentialData, contents: Any) -> None:
 def parse_dates(c: CredentialData, contents: Any) -> None:
     vf = c.get("validFrom")
     if isinstance(vf, str):
-        contents.valid_from = datetime.fromisoformat(vf.replace("Z", "+00:00"))
+        contents.valid_from = parse_rfc3339(vf)
     vu = c.get("validUntil")
     if isinstance(vu, str):
-        contents.valid_until = datetime.fromisoformat(vu.replace("Z", "+00:00"))
+        contents.valid_until = parse_rfc3339(vu)
 
 
 def parse_subject(c: CredentialData, contents: Any) -> None:

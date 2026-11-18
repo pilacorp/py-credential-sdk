@@ -277,8 +277,7 @@ class JOSECredential:
 
     def _execute_options(self, *opts: CredentialOpt) -> None:
         options = get_options(*opts)
-        execute_common_options(self.payload_data, options)
-        if options.is_verify_proof:
+        def verify_proof() -> None:
             if self.signature == "":
                 raise ValueError("credential verification failed: credential is not signed")
             try:
@@ -288,6 +287,8 @@ class JOSECredential:
                 jwtutil.check_time_claims(self.payload_data, options.leeway)
             except Exception as exc:
                 raise ValueError(f"credential verification failed: verify proof: {exc}") from exc
+
+        execute_common_options(self.payload_data, options, verify_proof if options.is_verify_proof else None)
         if options.is_check_expiration:
             try:
                 helper.check_expiration(self.payload_data, options.leeway)
