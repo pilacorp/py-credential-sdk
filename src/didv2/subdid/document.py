@@ -39,6 +39,13 @@ def sub_did_for(root_did: str, public_key_hex: str) -> str:
 
 
 def validate_sub_did(doc: dict[str, Any], root_did: str) -> None:
+    try:
+        _validate_sub_did(doc, root_did)
+    except (AttributeError, KeyError, TypeError) as exc:
+        raise ValueError(f"subdid: malformed document: {exc!r}") from exc
+
+
+def _validate_sub_did(doc: dict[str, Any], root_did: str) -> None:
     if not doc:
         raise ValueError("subdid: document is nil")
     try:

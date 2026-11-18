@@ -37,13 +37,15 @@ class DIDConfig:
 class DIDGenerator:
     """Thin facade kept for backwards compatibility; see didv2.did_generator.DIDGenerator."""
 
-    def __init__(self, cfg: DIDConfig | None = None) -> None:
+    def __init__(self, cfg: DIDConfig | None = None, *, chain: Any = None, **overrides: Any) -> None:
         from didv2.did_generator import DIDGenerator as Impl
 
-        self._impl = Impl(cfg or DIDConfig())
+        self._impl = Impl(cfg or DIDConfig(), chain=chain, **overrides)
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._impl, name)
 
-    def generate_did_tx(self, did_type: int, public_key_hex: str, hash_: str = "", metadata: dict | None = None):
-        return self._impl.generate_did_tx(did_type, public_key_hex, hash_, metadata)
+    def generate_did_tx(
+        self, did_type: int, public_key_hex: str, hash_: str = "", metadata: dict | None = None, **overrides: Any
+    ):
+        return self._impl.generate_did_tx(did_type, public_key_hex, hash_, metadata, **overrides)

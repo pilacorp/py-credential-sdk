@@ -1,7 +1,7 @@
 from eth_abi import encode
 from eth_utils import keccak, to_checksum_address
 
-from credential.vccontract.rpc import JsonRpc
+from didv2.jsonrpc import JsonRpc
 from didv2.config import DEFAULT_DID_SMC_ADDRESS, DEFAULT_RPC
 from didv2.didcontract.contract import has_role_selector, subtree_writer_role
 from didv2.hexutil import address_bytes, hex_to_bytes, is_hex_address, with_0x

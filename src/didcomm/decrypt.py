@@ -41,4 +41,7 @@ def decrypt_jwe(jwe_str: str, shared_key: bytes) -> str:
             plain = aesgcm.decrypt(iv, ciphertext + shared_key[:16], None)
         except Exception as exc:
             raise ValueError("decryption failed: cipher: message authentication failed") from exc
-    return plain.decode("utf-8", "replace")
+    try:
+        return plain.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError("decrypted payload is not valid UTF-8") from exc

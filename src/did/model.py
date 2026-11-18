@@ -16,7 +16,7 @@ class DIDType(str, Enum):
 class KeyPair:
     address: str
     public_key: str
-    private_key: str
+    private_key: str = field(repr=False)
     identifier: str
 
 
@@ -67,7 +67,7 @@ class DIDDocument:
 
 @dataclass
 class Secret:
-    private_key_hex: str
+    private_key_hex: str = field(repr=False)
 
 
 @dataclass

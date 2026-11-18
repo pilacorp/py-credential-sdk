@@ -55,6 +55,6 @@ class DIDGenerator:
             self.config.rpc, self.config.did_address, self.config.chain_id
         )
         tx = registry.generate_set_attribute_tx(
-            priv_key, address, str(did_type), nonce=nonce
+            priv_key, address, getattr(did_type, "value", did_type), nonce=nonce
         )
         return SubmitDIDTX(tx_hex=tx.tx_hex, tx_hash=tx.tx_hash)

@@ -32,7 +32,7 @@ def generate_did_document(
 ) -> DIDDocument:
     doc_metadata: dict[str, Any] = dict(metadata or {})
     if did_type:
-        doc_metadata["type"] = str(did_type)
+        doc_metadata["type"] = getattr(did_type, "value", did_type)
     if hash_:
         doc_metadata["hash"] = hash_
 

@@ -87,7 +87,7 @@ def rotate_verification_method(
     old_id = old["id"]
     purposes = _purposes_of_kid(doc, old_id)
     new_id = add_verification_method(doc, new_vm, purposes)
-    old["revoked"] = revoked_at
+    old["revoked"] = rfc3339_nano(revoked_at)
     old["revocationReason"] = reason
     _ensure_context(doc, CID_CONTEXT)
     return new_id
@@ -112,11 +112,16 @@ def revoke_verification_method(
     if not vm:
         raise ValueError(f"verification method not found: {kid}")
     if vm.get("revoked") is not None:
+        # go#182: a soft-revoked key may leak later; raise the reason, keep the first revoked time.
+        if reason == "keyCompromise" and vm.get("revocationReason") != "keyCompromise":
+            vm["revocationReason"] = reason
+            _ensure_context(doc, CID_CONTEXT)
+            return
         at = rfc3339_nano(vm["revoked"])
         raise ValueError(
             f"verification method {vm['id']!r} is already revoked at {at} (reason: {vm.get('revocationReason', '')})"
         )
-    vm["revoked"] = revoked_at
+    vm["revoked"] = rfc3339_nano(revoked_at)
     vm["revocationReason"] = reason
     _ensure_context(doc, CID_CONTEXT)
 

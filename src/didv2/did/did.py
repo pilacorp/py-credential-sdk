@@ -322,7 +322,7 @@ def hash_did_document(doc: dict[str, Any] | None) -> str:
 class KeyPair:
     """secp256k1 key pair of a DID; ``p256_public_key`` is set only by generate_dual_curve_key_pair."""
 
-    private_key: keys.PrivateKey
+    private_key: keys.PrivateKey = field(repr=False)
     p256_public_key: ec.EllipticCurvePublicKey | None = None
 
     @property

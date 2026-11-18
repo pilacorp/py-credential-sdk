@@ -65,7 +65,9 @@ class DIDGenerator:
         cfg = self._resolve(overrides)
         key_pair = generate_dual_curve_key_pair()
         did_signer = DefaultProvider(key_pair.get_private_key_hex())
-        overrides = {**overrides, "did_signer": did_signer, "cap_id": cfg.cap_id}
+        # add_vms is already merged into cfg.extra_vms; passing it on would add it twice
+        overrides = {k: v for k, v in overrides.items() if k != "add_vms"}
+        overrides.update(did_signer=did_signer, cap_id=cfg.cap_id)
         if cfg.enable_p256_vm:
             did_addr = address_from_public_key_hex(key_pair.get_public_key_hex())
             vm = new_p256_multikey_vm(to_did(cfg.method, did_addr), "#key-2", key_pair.p256_public_key)
@@ -113,9 +115,9 @@ class DIDGenerator:
                 cfg.epoch = self._get_chain(cfg).get_capability_epoch(issuer_addr)
             except Exception as exc:
                 raise ValueError(f"failed to get capability epoch: {exc}") from exc
-        # Go signs for the generator's base contract address, not a per-call override
+        # sign for the contract the tx goes to (overrides applied; Go#196 ignores them)
         return generate_issue_did_signature(
-            self.cfg.did_smc_addr, issuer_addr, did_addr, did_type, cfg.epoch, cfg.cap_id, cfg.issuer_signer
+            cfg.did_smc_addr, issuer_addr, did_addr, did_type, cfg.epoch, cfg.cap_id, cfg.issuer_signer
         )
 
     def generate_did_create_transaction(

@@ -45,7 +45,7 @@ class ErrChainUnavailable(Exception):
     pass
 
 
-class ErrChainMismatch(Exception):
+class ErrChainMismatch(ErrChainUnavailable):
     pass
 
 
@@ -153,6 +153,13 @@ class Verifier:
 
 
 def _consistent_proof(proof: ProofResponse, sub_did: str) -> bool:
+    try:
+        return _consistent_proof_unchecked(proof, sub_did)
+    except (AttributeError, KeyError, TypeError):
+        return False
+
+
+def _consistent_proof_unchecked(proof: ProofResponse, sub_did: str) -> bool:
     if proof["did"] != sub_did:
         return False
     try:
