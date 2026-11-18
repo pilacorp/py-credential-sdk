@@ -16,11 +16,12 @@ import copy
 import hashlib
 import json
 import re
+import threading
+import time
 from decimal import Decimal
 from functools import lru_cache
 from importlib import resources
 from typing import Any, Callable
-from urllib.request import urlopen
 
 from pyld import jsonld
 from pyld.canon import URDNA2015
@@ -66,8 +67,125 @@ def document_loader(url: str, options: dict[str, Any] | None = None) -> dict[str
     extra = _EXTRA_CONTEXTS.get(url)
     if extra is not None:
         return {"contextUrl": None, "document": copy.deepcopy(extra()), "documentUrl": url}
-    with urlopen(url, timeout=30) as resp:  # noqa: S310
-        return {"contextUrl": None, "document": json.loads(resp.read()), "documentUrl": url}
+    return {"contextUrl": None, "document": _fetch_remote_context(url), "documentUrl": url}
+
+
+_REMOTE_TTL = 60.0
+_remote_cache: dict[str, tuple[float, Any]] = {}
+_remote_lock = threading.Lock()
+
+
+def _fetch_remote_context(url: str) -> Any:
+    """An unknown @context is attacker-chosen and fetched before the signature check, so it goes through
+    safehttp: https only, no internal addresses, bounded time, size and redirects. The result is cached
+    briefly so one verify fetches each URL once (pyld asks for it more than once)."""
+    from digitalcredential.internal import safehttp
+
+    now = time.monotonic()
+    with _remote_lock:
+        hit = _remote_cache.get(url)
+        if hit and now - hit[0] < _REMOTE_TTL:
+            return copy.deepcopy(hit[1])
+    try:
+        body, _ = safehttp.get(
+            safehttp.new_client(),
+            url,
+            ["application/ld+json", "application/json"],
+            safehttp.Limits(timeout_seconds=10, max_bytes=1 << 20, any_content_type=True),
+        )
+        doc = json.loads(body)
+    except (safehttp.SafeHTTPError, ValueError) as exc:
+        raise JsonLdError(f"could not load remote context: {type(exc).__name__}", "jsonld.LoadDocumentError") from exc
+    with _remote_lock:
+        if len(_remote_cache) >= 16:
+            _remote_cache.pop(next(iter(_remote_cache)))
+        _remote_cache[url] = (now, doc)
+    return copy.deepcopy(doc)
+
+
+# ---------------------------------------------------------------- work limit (Go maxBlankNodeWork)
+
+MAX_BLANK_NODE_WORK = 20000
+
+
+class ErrBlankNodeWork(ValueError):
+    """A dataset refused for the search URDNA2015 would take (too many interchangeable blank nodes)."""
+
+
+def _is_blank(n: Any) -> bool:
+    return isinstance(n, dict) and n.get("type") == "blank node"
+
+
+def blank_node_work(dataset: dict[str, list[dict[str, Any]]]) -> int:
+    """Port of Go blankNodeWork: scores the search URDNA2015 will do. Blank nodes whose masked quads are
+    unique are labelled at once and cost nothing; each group of interchangeable ones scores the product of
+    the orderings tried, times its size, times its blank-node edges. Stops early above the limit."""
+
+    def mask(n: Any, id_: str) -> Any:
+        if not _is_blank(n):
+            return repr(sorted(n.items())) if isinstance(n, dict) else repr(n)
+        return "_:a" if n["value"] == id_ else "_:z"
+
+    lines: dict[str, list[str]] = {}
+    related: dict[str, list[tuple[str, str]]] = {}
+    for graph, quads in dataset.items():
+        gnode = None if graph == "@default" else {"type": "blank node" if graph.startswith("_:") else "IRI", "value": graph}
+        for q in quads:
+            nodes = [q["subject"], q["object"], q.get("name", gnode)]
+            pred = q["predicate"]["value"]
+            for n in nodes:
+                if not _is_blank(n):
+                    continue
+                id_ = n["value"]
+                lines.setdefault(id_, []).append(f"{mask(nodes[0], id_)} {pred} {mask(nodes[1], id_)} {mask(nodes[2], id_)}")
+                for i, other in enumerate(nodes):
+                    if _is_blank(other) and other["value"] != id_:
+                        related.setdefault(id_, []).append(("g" if i == 2 else f"{i}{pred}", other["value"]))
+    interned: dict[str, int] = {}
+    sig: dict[str, int] = {}
+    sharing: dict[int, int] = {}
+    for id_, ls in lines.items():
+        k = interned.setdefault("\n".join(sorted(ls)), len(interned))
+        sig[id_] = k
+        sharing[k] = sharing.get(k, 0) + 1
+
+    def interchangeable(id_: str) -> bool:
+        return sharing[sig[id_]] > 1
+
+    work = 0
+    seen: set[str] = set()
+    for start in lines:
+        if start in seen or not interchangeable(start):
+            continue
+        seen.add(start)
+        group, orderings, edges = [start], 1, 0
+        i = 0
+        while i < len(group):
+            rel = related.get(group[i], [])
+            edges += len(rel)
+            counts: dict[str, int] = {}
+            for how, rid in rel:
+                lst = f"{how}\x00{sig[rid]}"
+                counts[lst] = counts.get(lst, 0) + 1
+                counts[f"{lst}\x00{rid}"] = counts.get(f"{lst}\x00{rid}", 0) + 1
+                orderings = orderings * counts[lst] // counts[f"{lst}\x00{rid}"]
+                if orderings > MAX_BLANK_NODE_WORK:
+                    return orderings
+                if rid not in seen and interchangeable(rid):
+                    seen.add(rid)
+                    group.append(rid)
+            i += 1
+        search = orderings * len(group)
+        if search > 1:
+            work += search * edges
+            if work > MAX_BLANK_NODE_WORK:
+                return work
+    return work
+
+
+def _check_work(dataset: Any) -> None:
+    if isinstance(dataset, dict) and blank_node_work(dataset) > MAX_BLANK_NODE_WORK:
+        raise ErrBlankNodeWork("normalize: too many interchangeable blank nodes")
 
 
 # ---------------------------------------------------------------- legacy path
@@ -77,6 +195,11 @@ class _LegacyProcessor(JsonLdProcessor):
     """pyld drops a relative IRI @type object when converting to RDF; json-gold (the Go legacy path) emits
     it as ``<Type>``. Credentials whose type no context defines (very common on VC 1.1 documents) were
     hashed that way, so legacy proofs only verify if the same quad is produced."""
+
+    def to_rdf(self, input_, options):  # noqa: ANN001
+        dataset = super().to_rdf(input_, options)
+        _check_work(dataset)
+        return dataset
 
     def _graph_to_rdf(self, graph, issuer, options):  # noqa: ANN001
         triples = super()._graph_to_rdf(graph, issuer, options)
@@ -331,6 +454,7 @@ def canonicalize_dataset_with_id_map(
                 if node is not None and node.get("type") == "blank node":
                     slots.append((quad, idx, node["value"]))
     opts = _opts(algorithm="URDNA2015", format="application/n-quads")
+    _check_work(dataset)
     try:
         res = URDNA2015().main(dataset_copy, opts)
     except JsonLdError as exc:

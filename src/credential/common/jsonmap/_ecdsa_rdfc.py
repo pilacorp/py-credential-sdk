@@ -99,7 +99,13 @@ def verify_ecdsa_rdfc(m: dict[str, Any], pub: Any, proof: Proof) -> bool:
     return ecdsa_verify_signature(pub, pv, doc)
 
 
+_MAX_SIG_B58 = 88  # base58 of 64 bytes; plus the multibase prefix "z"
+
+
 def _verify_ecdsa_spec_conformant(m: dict[str, Any], pub: ec.EllipticCurvePublicKey, proof: Proof) -> bool:
+    if len(proof.proof_value) > _MAX_SIG_B58 + 1:
+        # base58 decoding is quadratic: refuse before spending CPU on a signature that cannot be 64 bytes
+        raise ValueError("ecdsa-rdfc-2019 proofValue is longer than a 64-byte signature can be")
     try:
         signature = decode_multibase_key(proof.proof_value)
     except ValueError as exc:
