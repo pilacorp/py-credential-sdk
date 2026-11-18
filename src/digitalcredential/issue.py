@@ -254,7 +254,7 @@ def _check(req: IssueRequest, claims: dict[str, Any]) -> None:
                 raise _invalid(
                     f"dc: Claims vct#integrity does not match the document TypeMetadata was loaded from "
                     f"(draft-ietf-oauth-sd-jwt-vc-19 §6): {e}"
-                ) from None
+                ) from e
     # RFC 7800 §3: "At least one of the sub and iss claims MUST be present" beside cnf.
     # draft-ietf-oauth-sd-jwt-vc-20 §2.2.2.3 lifts this; drop the check when the pin moves past draft 19.
     if "cnf" in claims or req.holder_key is not None:
@@ -287,11 +287,13 @@ def _tm_vct(m: Any) -> str:
 
 
 def _tm_validate_issuance(m: Any, claims: dict[str, Any], disclose: list[Path]) -> None:
-    m.validate_issuance(claims, disclose)
+    from digitalcredential import typemeta
+
+    typemeta.validate_issuance(m, claims, disclose)
 
 
 def _tm_check_integrity(m: Any, value: str) -> None:
     from digitalcredential import typemeta
 
     docs = m.documents()
-    typemeta.check_integrity(docs[0], value)
+    typemeta.CheckIntegrity(docs[0], value)

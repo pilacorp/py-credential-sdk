@@ -26,7 +26,7 @@ from digitalcredential.typemeta.ref import Ref
 from digitalcredential.typemeta.http import HTTPResolver, HTTPResolverConfig, new_http_resolver
 from digitalcredential.typemeta.multi import Multi
 from digitalcredential.typemeta.static import Static
-from digitalcredential.typemeta.validate import ValidateOptions, validate_claims_payload
+from digitalcredential.typemeta.validate import ValidateOptions, validate_claims_payload, validate_issuance
 
 __all__ = [
     "Claim",
@@ -57,4 +57,5 @@ __all__ = [
     "parse_encoded",
     "ValidateOptions",
     "validate_claims_payload",
+    "validate_issuance",
 ]
