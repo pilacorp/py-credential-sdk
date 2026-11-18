@@ -449,8 +449,10 @@ def _parse_jose_credential(token: str, *opts: CredentialOpt) -> Any:
     return JOSECredential.parse(token, *opts)
 
 
-def parse_credential_with_validation(raw_credential: bytes | str) -> Credential:
-    return parse_credential(raw_credential, with_schema_validation(), with_verify_proof())
+def parse_credential_with_validation(raw_credential: bytes | str, schema_loader: SchemaLoaderFunc) -> Credential:
+    """Parse, validate against the credential's schema(s) and verify the proof. ``schema_loader(url) -> bytes``
+    is required: the SDK never fetches schema URLs taken from the credential."""
+    return parse_credential(raw_credential, with_schema_validation(), with_schema_loader(schema_loader), with_verify_proof())
 
 
 

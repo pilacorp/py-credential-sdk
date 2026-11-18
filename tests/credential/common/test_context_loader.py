@@ -22,3 +22,26 @@ def test_blank_node_work_limit():
         P.canonicalize_with_id_map(doc(8))
     with pytest.raises(ValueError):
         P.canonicalize_document(doc(8))
+
+
+def test_schema_validation_rejects():
+    import json
+
+    from credential.vc import credential_helper as h
+
+    class O:
+        loaded_schema_loader = None
+
+    cred = {"@context": ["https://www.w3.org/ns/credentials/v2"], "type": ["VerifiableCredential"], "issuer": "did:x:1",
+            "credentialSubject": {"id": "did:x:2"}, "credentialSchema": {"id": "https://s.example/1", "type": "JsonSchema"}}
+    # reproduce only the schema branch: other required props may fail first, so call with required keys present
+    for k in h.REQUIRED_CREDENTIAL_PROPERTIES:
+        cred.setdefault(k, "x")
+    with pytest.raises(ValueError, match="requires a schema loader"):
+        h.validate_credential(cred, O())
+    O.loaded_schema_loader = staticmethod(lambda u: b"not json")
+    with pytest.raises(ValueError, match="parse schema"):
+        h.validate_credential(cred, O())
+    O.loaded_schema_loader = staticmethod(lambda u: json.dumps({"required": ["nope"]}).encode())
+    with pytest.raises(ValueError, match="does not match schema"):
+        h.validate_credential(cred, O())

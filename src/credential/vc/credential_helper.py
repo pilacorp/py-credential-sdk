@@ -4,6 +4,8 @@ import json
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
+import jsonschema
+
 from credential.common.credential_status.credential_status import fetch_and_check_revocation
 from credential.common.util.json import shallow_copy_obj
 from credential.common.util.vc import map_slice, serialize_contexts, serialize_types
@@ -558,17 +560,22 @@ def validate_credential(m: CredentialData, opts: Any) -> None:
         if not isinstance(schema_id, str) or not schema_id:
             raise ValueError("credentialSchema.id must be a non-empty string")
         loader = getattr(opts, "loaded_schema_loader", None)
-        if loader is not None:
-            try:
-                schema_bytes = loader(schema_id)
-            except Exception as exc:
-                raise ValueError(f"failed to load schema via custom loader: {exc}") from exc
-            if not schema_bytes:
-                raise ValueError("failed to load schema via custom loader: schema is empty")
-            try:
-                import jsonschema
-
-                schema_doc = json.loads(schema_bytes.decode("utf-8"))
-                jsonschema.validate(instance=copy_map, schema=schema_doc)
-            except ImportError:
-                pass
+        if loader is None:
+            # Schema URLs come from the credential itself, so the SDK never fetches them (SSRF).
+            raise ValueError("schema validation requires a schema loader: pass with_schema_loader(...)")
+        try:
+            schema_bytes = loader(schema_id)
+        except Exception as exc:
+            raise ValueError(f"failed to load schema via custom loader: {exc}") from exc
+        if not schema_bytes:
+            raise ValueError("failed to load schema via custom loader: schema is empty")
+        try:
+            schema_doc = json.loads(schema_bytes.decode("utf-8") if isinstance(schema_bytes, bytes) else schema_bytes)
+        except ValueError as exc:
+            raise ValueError(f"failed to parse schema: {exc}") from exc
+        try:
+            jsonschema.validate(instance=copy_map, schema=schema_doc)
+        except jsonschema.SchemaError as exc:
+            raise ValueError(f"invalid schema: {exc.message}") from exc
+        except jsonschema.ValidationError as exc:
+            raise ValueError(f"credential does not match schema: {exc.message}") from exc
