@@ -8,7 +8,9 @@ from urllib.parse import urlparse
 from digitalcredential.internal import uri
 from digitalcredential.internal.allowlist import Hints, check, new as allowlist_new, redirects_any, redirects_to
 from digitalcredential.internal.httpcache import freshness
+from digitalcredential.internal import safehttp
 from digitalcredential.internal.safehttp import (
+    Client,
     ErrBlockedAddress,
     ErrBodyTooLarge,
     ErrContentTypeNotAccepted,
@@ -56,17 +58,16 @@ def redirect_any() -> RedirectPolicy:
 class HTTPResolverConfig:
     trusted_publisher_origins: list[str] = field(default_factory=list)
     redirects: RedirectPolicy = field(default_factory=RedirectPolicy)
-    fetch: FetchFn | None = None
+    fetch: FetchFn | None = None  # shortcut for http_client=Client.from_fetch(fetch)
+    http_client: Client | None = None  # trusted code; default is safehttp.new_client()
     disable_cache: bool = False
     now: Callable[[], datetime] | None = None
 
 
 class HTTPResolver:
     def __init__(self, cfg: HTTPResolverConfig) -> None:
-        if cfg.fetch is None:
-            raise ValueError("typemeta: HTTPResolver requires an injectable fetch")
         self._trusted = allowlist_new(cfg.trusted_publisher_origins)
-        self._fetch = cfg.fetch
+        self._client = cfg.http_client or (Client.from_fetch(cfg.fetch) if cfg.fetch else safehttp.new_client())
         self._no_cache = cfg.disable_cache
         self._now = cfg.now or (lambda: datetime.now(timezone.utc))
         self._cache = DocumentCache()
@@ -106,25 +107,12 @@ class HTTPResolver:
             if hit is not None:
                 return hit
         sent = now
-        if not self._limits.allows(ref.vct):
-            raise ErrAddressBlocked
-        body, headers = self._fetch(ref.vct)
-        if len(body) > self._limits.max_bytes:
-            raise ErrBodyTooLarge
-        if not self._limits.any_content_type:
-            ct = headers.get("content-type", "").split(";")[0].strip().lower()
-            if ct not in (MEDIA_TYPE_METADATA,):
-                raise ErrContentTypeNotAccepted
-        status = headers.get("status") or headers.get(":status")
-        if status is not None:
-            try:
-                code = int(str(status).split()[0])
-            except ValueError:
-                code = 0
-            if code == 404:
+        try:
+            body, headers = safehttp.get(self._client, ref.vct, [MEDIA_TYPE_METADATA], self._limits)
+        except StatusError as e:
+            if e.code == 404:
                 raise ErrNotFound("typemeta: the publisher answered 404") from None
-            if code and not (200 <= code < 300):
-                raise StatusError(code)
+            raise
         doc = body
         if ref.integrity == "":
             fresh = timedelta(seconds=freshness(headers, MAX_CACHE_LIFETIME))

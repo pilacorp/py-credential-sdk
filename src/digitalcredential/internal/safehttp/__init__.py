@@ -12,6 +12,7 @@ from __future__ import annotations
 import http.client
 import socket
 import ssl
+import threading
 import time
 from dataclasses import dataclass, field
 from typing import Callable, Iterable, Mapping
@@ -19,7 +20,7 @@ from urllib.parse import SplitResult, urljoin, urlsplit
 
 from digitalcredential.internal.safehttp.blocked import blocked, blocked_host, parse_addr
 
-_MAX_HEADER_BYTES = 64 << 10  # ponytail: http.client caps a line at 64 KiB, not the whole header block
+_MAX_HEADER_BYTES = 64 << 10  # whole header block, checked after getresponse (http.client bounds it to ~6 MiB)
 
 
 # ---------------------------------------------------------------- errors
@@ -293,7 +294,7 @@ def new_client() -> Client:
     return Client()
 
 
-def _dial(host: str, port_: int, timeout: float, check) -> socket.socket:
+def _dial(host: str, port_: int, timeout: float, check, deadline: float | None = None) -> socket.socket:
     err: Exception | None = None
     for family, stype, proto, _, sa in socket.getaddrinfo(host, port_, type=socket.SOCK_STREAM):
         ip = sa[0]
@@ -305,9 +306,12 @@ def _dial(host: str, port_: int, timeout: float, check) -> socket.socket:
             if bad:
                 err = err or ErrBlockedAddress(f"safehttp: blocked address: {ip}:{port_}")
                 continue
+        left = timeout if deadline is None else deadline - time.monotonic()
+        if left <= 0:
+            raise TimeoutError("deadline exceeded")
         s = socket.socket(family, stype, proto)
         try:
-            s.settimeout(min(timeout, 5.0))  # Go dialer: 5 s
+            s.settimeout(min(left, 5.0))  # Go dialer: 5 s
             s.connect(sa)
             return s
         except OSError as e:
@@ -324,12 +328,30 @@ def _socket_transport(client: Client) -> Transport:
         u = urlsplit(url)
         p = int(port(u))
         host = hostname(u)
+        deadline = time.monotonic() + timeout
+        expired = threading.Event()
+        holder: list[http.client.HTTPConnection] = []
+
+        def expire() -> None:
+            # The deadline covers connect, headers and body however slowly the server sends:
+            # a recv timeout only bounds one recv, so the socket is shut down at the deadline.
+            expired.set()
+            sock = holder[0].sock if holder else None
+            if sock is not None:
+                try:
+                    sock.shutdown(socket.SHUT_RDWR)
+                except OSError:
+                    pass
+                sock.close()
+
+        timer = threading.Timer(timeout, expire)
+        timer.daemon = True
 
         if u.scheme == "https":
 
             class Conn(http.client.HTTPSConnection):
                 def connect(self) -> None:
-                    raw = _dial(host, p, timeout, check)
+                    raw = _dial(host, p, timeout, check, deadline)
                     self.sock = ctx.wrap_socket(raw, server_hostname=host)
 
             conn: http.client.HTTPConnection = Conn(host, p, timeout=timeout, context=ctx)
@@ -337,19 +359,38 @@ def _socket_transport(client: Client) -> Transport:
 
             class Plain(http.client.HTTPConnection):
                 def connect(self) -> None:
-                    self.sock = _dial(host, p, timeout, check)
+                    self.sock = _dial(host, p, timeout, check, deadline)
 
             conn = Plain(host, p, timeout=timeout)
-        target = (u.path or "/") + ("?" + u.query if u.query else "")
-        conn.request("GET", target, headers={**headers, "Connection": "close"})
-        resp = conn.getresponse()
+        holder.append(conn)
+
+        def close() -> None:
+            timer.cancel()
+            conn.close()
+
+        def guard(e: Exception) -> Exception:
+            return TimeoutError("deadline exceeded") if expired.is_set() else e
+
+        timer.start()
+        try:
+            target = (u.path or "/") + ("?" + u.query if u.query else "")
+            conn.request("GET", target, headers={**headers, "Connection": "close"})
+            resp = conn.getresponse()
+        except Exception as e:  # noqa: BLE001
+            close()
+            raise guard(e) from e
+        hdrs = resp.getheaders()
+        if sum(len(k) + len(v) + 4 for k, v in hdrs) > _MAX_HEADER_BYTES:
+            close()
+            raise FetchError("safehttp: Get: response headers over 65536 bytes")
 
         def read(n: int) -> bytes:
-            if conn.sock is not None:
-                conn.sock.settimeout(max(timeout, 0.001))
-            return resp.read(n)
+            try:
+                return resp.read(n)
+            except Exception as e:  # noqa: BLE001
+                raise guard(e) from e
 
-        return Response(resp.status, Headers(resp.getheaders()), read, conn.close)
+        return Response(resp.status, Headers(hdrs), read, close)
 
     return send
 

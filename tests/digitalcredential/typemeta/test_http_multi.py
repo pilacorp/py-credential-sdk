@@ -103,3 +103,26 @@ def test_typemeta_multi_cancelled_context() -> None:
         raise AssertionError("expected cancel")
     except CancelledError:
         pass
+
+
+def test_resolver_defaults_and_status_before_content_type():
+    from digitalcredential.typemeta import ErrNotFound
+    from digitalcredential.typemeta.http import HTTPResolverConfig
+
+    vct = "https://example.com/t"
+    new_http_resolver(HTTPResolverConfig(trusted_publisher_origins=["https://example.com"]))  # no fetch: safehttp client
+    r = new_http_resolver(
+        HTTPResolverConfig(
+            trusted_publisher_origins=["https://example.com"],
+            fetch=lambda url: (b"<html>", {"Content-Type": "text/html", "status": "404"}),
+        )
+    )
+    with pytest.raises(ErrNotFound):
+        r.metadata(Ref(vct=vct))
+    ok = new_http_resolver(
+        HTTPResolverConfig(
+            trusted_publisher_origins=["https://example.com"],
+            fetch=lambda url: (b"{}", {"Content-Type": "application/json"}),
+        )
+    )
+    assert ok.metadata(Ref(vct=vct)) == b"{}"
