@@ -17,7 +17,7 @@ def test_slow_body_ends_within_timeout():
     def serve():
         c, _ = srv.accept()
         c.recv(4096)
-        c.sendall(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 100\r\n\r\n")
+        c.sendall(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 100\r\nConnection: close\r\n\r\n")
         for _ in range(100):
             try:
                 c.sendall(b"x")

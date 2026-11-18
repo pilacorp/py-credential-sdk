@@ -40,10 +40,10 @@ class JsonRpc:
             with _opener.open(req, timeout=self.timeout) as resp:  # noqa: S310
                 chunks, size = [], 0
                 while True:
-                    # ponytail: deadline checked between reads; a single stalled recv is bounded by timeout
+                    # ponytail: deadline checked between recvs; one stalled recv is bounded by the socket timeout, so worst case ~2x timeout
                     if time.monotonic() > deadline:
                         raise ValueError("RPC call timed out")
-                    chunk = resp.read(65536)
+                    chunk = resp.read1(65536)  # read() would block until 64 KiB arrive
                     if not chunk:
                         break
                     size += len(chunk)

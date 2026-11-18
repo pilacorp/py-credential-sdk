@@ -330,14 +330,13 @@ def _socket_transport(client: Client) -> Transport:
         host = hostname(u)
         deadline = time.monotonic() + timeout
         expired = threading.Event()
-        holder: list[http.client.HTTPConnection] = []
+        socks: list[socket.socket] = []  # http.client drops conn.sock once a Connection: close response arrives
 
         def expire() -> None:
             # The deadline covers connect, headers and body however slowly the server sends:
             # a recv timeout only bounds one recv, so the socket is shut down at the deadline.
             expired.set()
-            sock = holder[0].sock if holder else None
-            if sock is not None:
+            for sock in socks:
                 try:
                     sock.shutdown(socket.SHUT_RDWR)
                 except OSError:
@@ -352,6 +351,7 @@ def _socket_transport(client: Client) -> Transport:
             class Conn(http.client.HTTPSConnection):
                 def connect(self) -> None:
                     raw = _dial(host, p, timeout, check, deadline)
+                    socks.append(raw)
                     self.sock = ctx.wrap_socket(raw, server_hostname=host)
 
             conn: http.client.HTTPConnection = Conn(host, p, timeout=timeout, context=ctx)
@@ -360,9 +360,9 @@ def _socket_transport(client: Client) -> Transport:
             class Plain(http.client.HTTPConnection):
                 def connect(self) -> None:
                     self.sock = _dial(host, p, timeout, check, deadline)
+                    socks.append(self.sock)
 
             conn = Plain(host, p, timeout=timeout)
-        holder.append(conn)
 
         def close() -> None:
             timer.cancel()

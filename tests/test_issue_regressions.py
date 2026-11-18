@@ -108,3 +108,41 @@ def test_ecdsasd_signer_must_hold_vm_key():
     JSONMap(doc()).add_ecdsasd_base_proof(a, "did:example:i#key-1", "assertionMethod", [], vm_pub=pub)
     with pytest.raises(ValueError, match="does not verify"):
         JSONMap(doc()).add_ecdsasd_base_proof(b, "did:example:i#key-1", "assertionMethod", [], vm_pub=pub)
+
+
+def test_jsonrpc_deadline_and_no_redirect():
+    import socket
+    import threading
+    import time
+
+    from pila_credential.didv2.jsonrpc import JsonRpc
+
+    srv = socket.socket()
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(2)
+
+    def serve():
+        for _ in range(2):
+            c, _a = srv.accept()
+            req = c.recv(4096)
+            if b"/redir" in req:
+                c.sendall(b"HTTP/1.1 302 Found\r\nLocation: /x\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                c.close()
+                continue
+            c.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 100\r\nConnection: close\r\n\r\n")
+            for _i in range(100):
+                try:
+                    c.sendall(b"x")
+                except OSError:
+                    return
+                time.sleep(0.25)
+
+    threading.Thread(target=serve, daemon=True).start()
+    base = f"http://127.0.0.1:{srv.getsockname()[1]}"
+    with pytest.raises(ValueError, match="HTTP error 302"):
+        JsonRpc(base + "/redir").call("m", [])
+    t = time.monotonic()
+    with pytest.raises(ValueError, match="timed out"):
+        JsonRpc(base + "/slow", timeout=1).call("m", [])
+    assert time.monotonic() - t < 3
+    srv.close()
