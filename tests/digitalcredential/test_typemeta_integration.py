@@ -5,10 +5,10 @@ from datetime import datetime, timezone
 
 import pytest
 
-from digitalcredential import IssueRequest, PublicKey, SigningKey, StaticResolver, issue, parse, typemeta
-from digitalcredential.verify_options import with_all_disclosures, with_type_metadata
-from jose.errors import ErrInvalidArgument
-from jose.jws import private_key_signer
+from pila_credential.digitalcredential import IssueRequest, PublicKey, SigningKey, StaticResolver, issue, parse, typemeta
+from pila_credential.digitalcredential.verify_options import with_all_disclosures, with_type_metadata
+from pila_credential.jose.errors import ErrInvalidArgument
+from pila_credential.jose.jws import private_key_signer
 
 from dc_helpers import new_key
 
@@ -50,8 +50,8 @@ def test_valid_credential_verifies_and_violations_reject():
 def test_iat_type_checked_and_future_rejected():
     from datetime import timedelta
 
-    from digitalcredential.errors import DigitalCredentialError
-    from digitalcredential.verify_options import with_iat_check, with_reject_future_iat
+    from pila_credential.digitalcredential.errors import DigitalCredentialError
+    from pila_credential.digitalcredential.verify_options import with_iat_check, with_reject_future_iat
 
     k = new_key()
     now = datetime.now(timezone.utc)

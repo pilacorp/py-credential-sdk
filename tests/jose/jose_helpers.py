@@ -8,7 +8,7 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric import ec
 from eth_keys import keys as eth_keys
 
-from jose.jws import AlgES256, AlgES256K, private_key_signer, sign
+from pila_credential.jose.jws import AlgES256, AlgES256K, private_key_signer, sign
 
 CTX = object()  # Python has no context.Context; Sign only needs a non-None ctx.
 
@@ -78,7 +78,7 @@ def must_sign(s, pub, header, payload: bytes | str) -> str:
 
 def craft(s, header: str, payload: str) -> str:
     """Build a token from raw parts, signed by s over the given segments."""
-    from jose import encode_segment
+    from pila_credential.jose import encode_segment
 
     signing_input = encode_segment(header.encode()) + "." + encode_segment(payload.encode())
     sig = s.sign(CTX, signing_input.encode())
@@ -86,6 +86,6 @@ def craft(s, header: str, payload: str) -> str:
 
 
 def b64(b: bytes) -> str:
-    from jose import encode_segment
+    from pila_credential.jose import encode_segment
 
     return encode_segment(b)

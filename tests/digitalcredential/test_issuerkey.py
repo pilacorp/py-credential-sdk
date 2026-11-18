@@ -2,11 +2,11 @@
 
 import pytest
 
-from digitalcredential.errors import errors_is
-from digitalcredential.issuerkey import ErrIssuerNotSupported, PublicKey, select
-from digitalcredential.issuerkey_multi import multi
-from jose.errors import ErrInvalidArgument
-from jose.json import JsonNumber
+from pila_credential.digitalcredential.errors import errors_is
+from pila_credential.digitalcredential.issuerkey import ErrIssuerNotSupported, PublicKey, select
+from pila_credential.digitalcredential.issuerkey_multi import multi
+from pila_credential.jose.errors import ErrInvalidArgument
+from pila_credential.jose.json import JsonNumber
 
 from dc_helpers import new_key
 

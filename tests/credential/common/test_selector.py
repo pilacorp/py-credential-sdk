@@ -1,11 +1,11 @@
 from datetime import datetime, timezone
 
-from credential.common.verification_method.selector import (
+from pila_credential.credential.common.verification_method.selector import (
     select_default_signing_vm,
     select_latest_active_vm_for_purpose,
 )
-from credential.common.verification_method.resolve import resolve_signing_vm
-from didv2.did.verification_method_ops import add_verification_method, revoke_verification_method
+from pila_credential.credential.common.verification_method.resolve import resolve_signing_vm
+from pila_credential.didv2.did.verification_method_ops import add_verification_method, revoke_verification_method
 
 DID = "did:nda:0x19e7e376e7c213b7e7e7e46cc70a5dd086daff2a"
 PUB1 = "0x03354b9ae48c3cecaf6636ba88e321847edbf450a2777a012240d6d51705de73d7"

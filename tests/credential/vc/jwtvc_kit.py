@@ -8,15 +8,15 @@ from datetime import datetime, timedelta, timezone
 
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from credential.common.signer.p256 import P256Provider
-from credential.common.verification_method import (
+from pila_credential.credential.common.signer.p256 import P256Provider
+from pila_credential.credential.common.verification_method import (
     StaticResolver,
     new_did_document,
     new_p256_vm,
     new_secp256k1_vm,
 )
-from credential.vc.credential import CredentialContents, Subject
-from didv2.signer import DefaultProvider
+from pila_credential.credential.vc.credential import CredentialContents, Subject
+from pila_credential.didv2.signer import DefaultProvider
 
 SECP_PRIV = "57600b3f2b7e1054094e14cd85c72a40dc74c4ee062bb381cea604b55ce56aec"
 V2 = "https://www.w3.org/ns/credentials/v2"
@@ -81,7 +81,7 @@ def signing_input(header: dict, payload: dict) -> str:
 
 def sign_input(provider, si: str) -> str:
     """Sign like the SDK's JWTSigner (sha256 + r||s, base64url)."""
-    from credential.common.jwt import JWTSigner
+    from pila_credential.credential.common.jwt import JWTSigner
 
     return JWTSigner(provider).sign_string(si)
 

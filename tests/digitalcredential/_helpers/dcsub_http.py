@@ -14,7 +14,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.x509.oid import NameOID
 
-from digitalcredential.internal.safehttp import Client
+from pila_credential.digitalcredential.internal.safehttp import Client
 
 
 class Req:
@@ -126,7 +126,7 @@ def routed_client(server: Server, urls: list[str] | None = None) -> Client:
     import http.client
     from urllib.parse import urlsplit
 
-    from digitalcredential.internal.safehttp import Headers, Response
+    from pila_credential.digitalcredential.internal.safehttp import Headers, Response
 
     ctx = ssl.create_default_context(cafile=_cert() + "/c.pem")
     ctx.check_hostname = False

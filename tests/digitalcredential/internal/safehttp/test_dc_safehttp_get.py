@@ -7,8 +7,8 @@ import pytest
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "_helpers"))
 from dcsub_http import Reply, Server, plain_client, redirect  # noqa: E402
 
-from digitalcredential.internal import safehttp as sh  # noqa: E402
-from digitalcredential.internal.safehttp import Limits, as_, get, is_, new_client  # noqa: E402
+from pila_credential.digitalcredential.internal import safehttp as sh  # noqa: E402
+from pila_credential.digitalcredential.internal.safehttp import Limits, as_, get, is_, new_client  # noqa: E402
 
 LIMITS = Limits(timeout_seconds=5, max_redirects=3, max_bytes=1024)
 JSON = ["application/json"]

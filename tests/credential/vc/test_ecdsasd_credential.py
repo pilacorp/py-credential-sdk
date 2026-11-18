@@ -1,4 +1,4 @@
-from credential.vc.ecdsasd_credential import ECDSASDCredential
+from pila_credential.credential.vc.ecdsasd_credential import ECDSASDCredential
 
 
 def test_ecdsasd_credential_parse_and_create():

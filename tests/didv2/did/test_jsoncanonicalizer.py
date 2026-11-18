@@ -1,4 +1,4 @@
-from didv2.did.jsoncanonicalizer import transform
+from pila_credential.didv2.did.jsoncanonicalizer import transform
 
 
 def test_object_key_order() -> None:

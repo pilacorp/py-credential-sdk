@@ -7,15 +7,15 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from jwtvc_kit import V1, V2, b64, header_of, jose_contents, p256_setup, sign_input, signing_input
 
-from credential.common.dto.proof import Proof
-from credential.common.jwt import JWTVerifier
-from credential.common.sdjwt import b64url_decode  # noqa: F401
-from credential.common.util.compress import compress_to_base64url
-from credential.vc.credential import (
+from pila_credential.credential.common.dto.proof import Proof
+from pila_credential.credential.common.jwt import JWTVerifier
+from pila_credential.credential.common.sdjwt import b64url_decode  # noqa: F401
+from pila_credential.credential.common.util.compress import compress_to_base64url
+from pila_credential.credential.vc.credential import (
     Decoy, parse_credential, with_check_revocation, with_resolver, with_sd_decoy_digests, with_sd_disclosures,
     with_sd_selective_paths, with_verification_method_key,
 )
-from credential.vc.jose_credential import JOSECredential
+from pila_credential.credential.vc.jose_credential import JOSECredential
 
 import hashlib
 
@@ -232,7 +232,7 @@ def test_sd_is_confined_to_the_subject(status_server):
 
 
 def test_prebuilt_disclosures_are_validated_not_refused():
-    from credential.common import sdjwt
+    from pila_credential.credential.common import sdjwt
 
     did = "did:example:sd-prebuilt"
     prov, vm, res = p256_setup(did)

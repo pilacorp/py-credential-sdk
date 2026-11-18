@@ -6,10 +6,10 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
 
-from credential.common.credential_status import Client, fetch_and_check_revocation, is_revoked
-from credential.common.credential_status.credential_status import DEFAULT_TIMEOUT, MAX_DECODED_BYTES
-from credential.common.credential_status.model import StatusListCredentialSubject
-from credential.common.util.compress import compress_to_base64url
+from pila_credential.credential.common.credential_status import Client, fetch_and_check_revocation, is_revoked
+from pila_credential.credential.common.credential_status.credential_status import DEFAULT_TIMEOUT, MAX_DECODED_BYTES
+from pila_credential.credential.common.credential_status.model import StatusListCredentialSubject
+from pila_credential.credential.common.util.compress import compress_to_base64url
 
 
 def _pad(raw: bytes) -> bytes:

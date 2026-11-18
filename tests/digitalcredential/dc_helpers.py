@@ -8,22 +8,22 @@ from typing import Any
 
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from digitalcredential.claims import TYP_DC_SD_JWT
-from digitalcredential.credential import Credential, compact_sd_jwt, parse
-from digitalcredential.errors import DigitalCredentialError
-from digitalcredential.issue import IssueRequest, issue
-from digitalcredential.issuerkey import PublicKey, SigningKey
-from digitalcredential.verify_options import with_audience, with_nonce, with_now
-from jose import json as jose_json
-from jose.jwk import jwk as jose_jwk
-from jose.jws import jws as jose_jws
-from jose.jws import private_key_signer
-from jose.sdjwt import conceal, sd_hash
+from pila_credential.digitalcredential.claims import TYP_DC_SD_JWT
+from pila_credential.digitalcredential.credential import Credential, compact_sd_jwt, parse
+from pila_credential.digitalcredential.errors import DigitalCredentialError
+from pila_credential.digitalcredential.issue import IssueRequest, issue
+from pila_credential.digitalcredential.issuerkey import PublicKey, SigningKey
+from pila_credential.digitalcredential.verify_options import with_audience, with_nonce, with_now
+from pila_credential.jose import json as jose_json
+from pila_credential.jose.jwk import jwk as jose_jwk
+from pila_credential.jose.jws import jws as jose_jws
+from pila_credential.jose.jws import private_key_signer
+from pila_credential.jose.sdjwt import conceal, sd_hash
 
 try:
-    from digitalcredential.statuslist import Ref
+    from pila_credential.digitalcredential.statuslist import Ref
 except ImportError:
-    from digitalcredential.statuslist.checker import Ref
+    from pila_credential.digitalcredential.statuslist.checker import Ref
 
 TESTDATA = Path(__file__).parent / "testdata"
 

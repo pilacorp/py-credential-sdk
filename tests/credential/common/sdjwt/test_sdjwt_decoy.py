@@ -1,6 +1,6 @@
 """Port of go-credential-sdk/credential/common/sdjwt/decoy_test.go."""
-from credential.common.sdjwt import DecoyConfig, build_disclosures
-from credential.common.sdjwt.disclosure import _process_decoys
+from pila_credential.credential.common.sdjwt import DecoyConfig, build_disclosures
+from pila_credential.credential.common.sdjwt.disclosure import _process_decoys
 
 
 def test_array_decoy():

@@ -7,10 +7,10 @@ import pathlib
 
 import pytest
 
-from jose import ErrInvalidArgument, ErrMalformed, JsonNumber, decode_json, decode_json_object, decode_segment
-from jose.sdjwt import ConcealOptions, Disclosure, conceal, parse_disclosure, recreate, split
-from jose.sdjwt.limits import MAX_DISCLOSURES
-from jose.sdjwt.path import Path, compare_paths
+from pila_credential.jose import ErrInvalidArgument, ErrMalformed, JsonNumber, decode_json, decode_json_object, decode_segment
+from pila_credential.jose.sdjwt import ConcealOptions, Disclosure, conceal, parse_disclosure, recreate, split
+from pila_credential.jose.sdjwt.limits import MAX_DISCLOSURES
+from pila_credential.jose.sdjwt.path import Path, compare_paths
 
 TESTDATA = pathlib.Path(__file__).parent / "testdata" / "rfc9901-examples.json"
 

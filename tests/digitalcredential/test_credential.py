@@ -2,10 +2,10 @@
 
 import pytest
 
-from digitalcredential.credential import Credential, parse
-from digitalcredential.errors import MALFORMED, DigitalCredentialError, ErrPolicy, errors_is
-from jose import base64 as jose_b64
-from jose.errors import ErrInvalidArgument, ErrMalformed
+from pila_credential.digitalcredential.credential import Credential, parse
+from pila_credential.digitalcredential.errors import MALFORMED, DigitalCredentialError, ErrPolicy, errors_is
+from pila_credential.jose import base64 as jose_b64
+from pila_credential.jose.errors import ErrInvalidArgument, ErrMalformed
 
 from dc_helpers import KeysOf
 
@@ -77,8 +77,8 @@ def test_zero_credential(c):
         with pytest.raises(ErrPolicy):
             c.verify(KeysOf({}))
         return
-    from digitalcredential.present import present
-    from digitalcredential.verify import verify
+    from pila_credential.digitalcredential.present import present
+    from pila_credential.digitalcredential.verify import verify
 
     with pytest.raises(ErrInvalidArgument):
         present(None, None)

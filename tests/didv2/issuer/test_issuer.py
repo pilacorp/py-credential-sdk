@@ -1,12 +1,12 @@
 from eth_account import Account
 from eth_account.messages import encode_defunct
 
-from didv2.config import DEFAULT_DID_SMC_ADDRESS
-from didv2.didcontract import create_did_tx, has_role_selector, writer_anchor_topic0
-from didv2.issuer import generate_cap_id, generate_issue_did_signature
-from didv2.signer import DefaultProvider
-from didv2.model import DID_TYPE_PEOPLE
-from didv2.keccak import keccak256, keccak256_hex
+from pila_credential.didv2.config import DEFAULT_DID_SMC_ADDRESS
+from pila_credential.didv2.didcontract import create_did_tx, has_role_selector, writer_anchor_topic0
+from pila_credential.didv2.issuer import generate_cap_id, generate_issue_did_signature
+from pila_credential.didv2.signer import DefaultProvider
+from pila_credential.didv2.model import DID_TYPE_PEOPLE
+from pila_credential.didv2.keccak import keccak256, keccak256_hex
 
 
 def test_cap_id() -> None:
@@ -27,7 +27,7 @@ def test_issue_signature_recovers() -> None:
         issuer,
     )
     compact = sig["r"].to_bytes(32, "big") + sig["s"].to_bytes(32, "big") + bytes([sig["v"]])
-    from didv2.issuer import build_issue_did_payload
+    from pila_credential.didv2.issuer import build_issue_did_payload
 
     digest = keccak256(
         build_issue_did_payload(

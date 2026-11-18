@@ -3,7 +3,7 @@
 import pytest
 from pyld.jsonld import JsonLdError
 
-from credential.common.processor import processor as P
+from pila_credential.credential.common.processor import processor as P
 
 
 @pytest.mark.parametrize("url", ["file:///etc/passwd", "http://127.0.0.1:9/x", "https://127.0.0.1/x"])
@@ -27,7 +27,7 @@ def test_blank_node_work_limit():
 def test_schema_validation_rejects():
     import json
 
-    from credential.vc import credential_helper as h
+    from pila_credential.credential.vc import credential_helper as h
 
     class O:
         loaded_schema_loader = None
@@ -48,8 +48,8 @@ def test_schema_validation_rejects():
 
 
 def test_non_finite_numbers_and_uncompressed_multikey_rejected():
-    from credential.common.util.json import strict_loads
-    from credential.common.verification_method.key_material import ec_pub_from_multikey_bytes
+    from pila_credential.credential.common.util.json import strict_loads
+    from pila_credential.credential.common.verification_method.key_material import ec_pub_from_multikey_bytes
 
     for bad in ('{"a": NaN}', '{"a": Infinity}', '{"a": 1e400}'):
         with pytest.raises(ValueError):

@@ -8,28 +8,28 @@ from pathlib import Path
 import pytest
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from credential.common.ecdsasd import create_base_proof, derive_proof, verify_base_proof, verify_proof
-from credential.common.ecdsasd.crypto_util import verify_p256
-from credential.common.ecdsasd.disclose import create_disclosure_data
-from credential.common.ecdsasd.hashes import hash_mandatory, hash_proof_config
-from credential.common.ecdsasd.keys import (
+from pila_credential.credential.common.ecdsasd import create_base_proof, derive_proof, verify_base_proof, verify_proof
+from pila_credential.credential.common.ecdsasd.crypto_util import verify_p256
+from pila_credential.credential.common.ecdsasd.disclose import create_disclosure_data
+from pila_credential.credential.common.ecdsasd.hashes import hash_mandatory, hash_proof_config
+from pila_credential.credential.common.ecdsasd.keys import (
     decode_p256_priv_multibase,
     encode_multibase_key,
     new_ephemeral_key,
 )
-from credential.common.ecdsasd.labelmap import canonicalize_and_group
-from credential.common.ecdsasd.ld import canonicalize_with_id_map
-from credential.common.ecdsasd.pointer import select_json_ld
-from credential.common.ecdsasd.proofvalue import (
+from pila_credential.credential.common.ecdsasd.labelmap import canonicalize_and_group
+from pila_credential.credential.common.ecdsasd.ld import canonicalize_with_id_map
+from pila_credential.credential.common.ecdsasd.pointer import select_json_ld
+from pila_credential.credential.common.ecdsasd.proofvalue import (
     SpecDerivedProof,
     parse_base_proof_value,
     serialize_base_proof_value,
     serialize_disclosure_proof_value,
 )
-from credential.common.ecdsasd.sign import create_base_proof_deterministic
-from credential.common.ecdsasd.verify import verify_derived_proof
-from credential.common.signer.p256 import P256Provider
-from credential.common.verification_method.key_material import ec_pub_from_multibase
+from pila_credential.credential.common.ecdsasd.sign import create_base_proof_deterministic
+from pila_credential.credential.common.ecdsasd.verify import verify_derived_proof
+from pila_credential.credential.common.signer.p256 import P256Provider
+from pila_credential.credential.common.verification_method.key_material import ec_pub_from_multibase
 
 W3C_DIR = (
     Path(__file__).resolve().parents[3].parent
@@ -211,12 +211,12 @@ def test_w3c_conformance_phase0_canonicalize_with_id_map() -> None:
 def test_w3c_conformance_phase1_multikey() -> None:
     keys = _w3c_load_keys()
     exp = _w3c_load_expected()
-    from credential.common.ecdsasd.keys import decode_multibase_key
+    from pila_credential.credential.common.ecdsasd.keys import decode_multibase_key
 
     proof_pub_raw = decode_multibase_key(keys["proofKeyPair"]["publicKeyMultibase"])
     assert encode_multibase_key(proof_pub_raw) == keys["proofKeyPair"]["publicKeyMultibase"]
     base_priv = decode_p256_priv_multibase(keys["baseKeyPair"]["secretKeyMultibase"])
-    from credential.common.ecdsasd.keys import pub_to_multikey_bytes
+    from pila_credential.credential.common.ecdsasd.keys import pub_to_multikey_bytes
 
     got = encode_multibase_key(pub_to_multikey_bytes(base_priv.public_key()))
     assert got == keys["baseKeyPair"]["publicKeyMultibase"]
@@ -296,7 +296,7 @@ def test_w3c_conformance_phase6_base_proof_value() -> None:
     assert bp.base_signature.hex() == exp["baseSignature"]
     assert encode_multibase_key(bp.public_key) == exp["proofPublicKey"]
     assert bp.mandatory_pointers == ["/issuer"]
-    from credential.common.ecdsasd.proofvalue import serialize_base_proof_value
+    from pila_credential.credential.common.ecdsasd.proofvalue import serialize_base_proof_value
 
     assert serialize_base_proof_value(bp) == exp["baseProofValue"]
 

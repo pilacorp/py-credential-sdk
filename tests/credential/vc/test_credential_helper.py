@@ -5,9 +5,9 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from credential.common.verification_method import StaticResolver, new_did_document, new_secp256k1_vm
-from credential.vc import credential_helper as helper
-from didv2.signer import DefaultProvider
+from pila_credential.credential.common.verification_method import StaticResolver, new_did_document, new_secp256k1_vm
+from pila_credential.credential.vc import credential_helper as helper
+from pila_credential.didv2.signer import DefaultProvider
 
 # A deterministic secp256k1 public key, only ever used to resolve a VM for tests that
 # build an unsigned JWTCredential and inspect its fields (never actually signed with).
@@ -18,7 +18,7 @@ _ISSUER_PUB_HEX = "04" + DefaultProvider(_ISSUER_PRIV_HEX)._key.public_key.to_by
 def _static_resolver_for(issuer: str) -> StaticResolver:
     return StaticResolver([new_did_document(issuer, [new_secp256k1_vm(issuer, "key-1", _ISSUER_PUB_HEX)])])
 
-from credential.vc.credential import (
+from pila_credential.credential.vc.credential import (
     CredentialContents,
     ParsedJSONCredential,
     Schema,

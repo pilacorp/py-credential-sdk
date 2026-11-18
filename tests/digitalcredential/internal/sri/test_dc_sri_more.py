@@ -3,7 +3,7 @@ import hashlib
 
 import pytest
 
-from digitalcredential.internal import sri
+from pila_credential.digitalcredential.internal import sri
 
 
 def b64(h):

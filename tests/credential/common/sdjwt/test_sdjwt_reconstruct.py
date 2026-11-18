@@ -5,9 +5,9 @@ import json
 
 import pytest
 
-from credential.common.sdjwt import DecoyConfig, build_disclosures, hash_disclosure, parse, reconstruct
-from credential.common.sdjwt.reconstruct import build_disclosure_map, process_node, validate_and_get_algorithm
-from credential.common.sdjwt.helper import parse_disclosure
+from pila_credential.credential.common.sdjwt import DecoyConfig, build_disclosures, hash_disclosure, parse, reconstruct
+from pila_credential.credential.common.sdjwt.reconstruct import build_disclosure_map, process_node, validate_and_get_algorithm
+from pila_credential.credential.common.sdjwt.helper import parse_disclosure
 
 SHA256, SHA384, SHA512 = "sha-256", "sha-384", "sha-512"
 

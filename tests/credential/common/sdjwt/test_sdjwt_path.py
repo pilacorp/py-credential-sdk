@@ -1,7 +1,7 @@
 """Port of go-credential-sdk/credential/common/sdjwt/path_test.go."""
 import pytest
 
-from credential.common.sdjwt.disclosure import TARGET_ARRAY_ELEM, parse_path, resolve_path
+from pila_credential.credential.common.sdjwt.disclosure import TARGET_ARRAY_ELEM, parse_path, resolve_path
 
 
 def test_parse_path():

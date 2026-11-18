@@ -1,4 +1,4 @@
-from credential.common.dto.proof import proof_from_map
+from pila_credential.credential.common.dto.proof import proof_from_map
 
 
 def test_proof_from_map_keeps_extra_fields():

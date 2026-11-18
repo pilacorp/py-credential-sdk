@@ -8,11 +8,11 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent / "vp"))
 from vp_helpers import StaticResolver, V2, new_did_document, p256_from_hex, p256_pub, p256_vm  # noqa: E402
 
-from credential.common.credential_status import Client
-from credential.common.jsonmap import JSONMap
-from credential.common.util.compress import compress_to_base64url
-from credential.vc import credential as vc
-from credential.vc import credential_helper as helper
+from pila_credential.credential.common.credential_status import Client
+from pila_credential.credential.common.jsonmap import JSONMap
+from pila_credential.credential.common.util.compress import compress_to_base64url
+from pila_credential.credential.vc import credential as vc
+from pila_credential.credential.vc import credential_helper as helper
 
 ISSUER = "did:example:status-issuer"
 LIST_URL = "https://status.example/lists/1"

@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from credential.common.sdjwt import (
+from pila_credential.credential.common.sdjwt import (
     build_sd_jwt_presentation,
     carries_sd_machinery,
     hash_disclosure,
@@ -12,8 +12,8 @@ from credential.common.sdjwt import (
     parse,
     parse_disclosure,
 )
-from credential.common.sdjwt.disclosure import _append_sd
-from credential.common.sdjwt.helper import b64url_decode
+from pila_credential.credential.common.sdjwt.disclosure import _append_sd
+from pila_credential.credential.common.sdjwt.helper import b64url_decode
 
 
 def enc(arr) -> str:

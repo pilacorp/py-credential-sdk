@@ -1,7 +1,7 @@
 """errtext.quote (Go internal/errtext) and errors.wrap."""
 
-from jose.errors import ErrMalformed, ErrUnsupportedKey, wrap
-from jose.internal.errtext import quote
+from pila_credential.jose.errors import ErrMalformed, ErrUnsupportedKey, wrap
+from pila_credential.jose.internal.errtext import quote
 
 
 def test_quote_matches_strconv_quote_and_cuts_at_32_bytes():

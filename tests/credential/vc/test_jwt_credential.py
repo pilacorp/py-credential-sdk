@@ -9,19 +9,19 @@ from jwtvc_kit import (
     sign_input, sign_outside, signing_input, token, vc11_contents,
 )
 
-from credential.common.dto.proof import Proof
-from credential.common.jwt import JWTVerifier
-from credential.common.signer.p256 import P256Provider
-from credential.common.verification_method import (
+from pila_credential.credential.common.dto.proof import Proof
+from pila_credential.credential.common.jwt import JWTVerifier
+from pila_credential.credential.common.signer.p256 import P256Provider
+from pila_credential.credential.common.verification_method import (
     StaticResolver, new_did_document, new_p256_multikey_vm, new_p256_vm, new_rsa_vm, new_secp256k1_vm,
 )
-from credential.vc.credential import (
+from pila_credential.credential.vc.credential import (
     CredentialContents, Decoy, Subject, parse_credential, with_check_expiration, with_leeway, with_replace_proof,
     with_resolver, with_sd_disclosures, with_sd_decoy_digests, with_sd_hash_algorithm, with_sd_selective_paths,
     with_sd_shuffle, with_verification_method_key, with_verify_proof,
 )
-from credential.vc.jwt_credential import JWTCredential
-from didv2.signer import DefaultProvider
+from pila_credential.credential.vc.jwt_credential import JWTCredential
+from pila_credential.didv2.signer import DefaultProvider
 
 
 def contents(did):
@@ -189,7 +189,7 @@ LEEWAY = [
 @pytest.mark.parametrize("fmt", ["jwt", "jose"])
 @pytest.mark.parametrize("name,vf,vu,lw,want", LEEWAY)
 def test_with_leeway(fmt, name, vf, vu, lw, want):
-    from credential.vc.jose_credential import JOSECredential
+    from pila_credential.credential.vc.jose_credential import JOSECredential
 
     cls = JWTCredential if fmt == "jwt" else JOSECredential
     did = "did:example:vc-leeway"
@@ -304,7 +304,7 @@ def test_signing_refuses_build_time_options(via, name, opt, want):
 # ---- signing_atomicity_test.go: refuse to replace -------------------------------
 @pytest.mark.parametrize("fmt", ["jwt", "jose"])
 def test_refuses_to_replace_a_signature(fmt):
-    from credential.vc.jose_credential import JOSECredential
+    from pila_credential.credential.vc.jose_credential import JOSECredential
 
     cls = JWTCredential if fmt == "jwt" else JOSECredential
     did = "did:example:signing-atomicity"
@@ -397,7 +397,7 @@ def test_vc11_new_refuses_sd_options_before_resolving(opt):
 
 
 def test_vc11_new_refuses_contents_carrying_digests():
-    from credential.common import sdjwt
+    from pila_credential.credential.common import sdjwt
 
     res_ = sdjwt.build_disclosures(
         {"credentialSubject": {"id": "did:example:subject", "name": "Alice", "bloodType": "O-",

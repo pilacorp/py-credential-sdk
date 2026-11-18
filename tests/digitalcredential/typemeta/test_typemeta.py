@@ -3,8 +3,8 @@ from pathlib import Path
 import hashlib
 import base64
 
-from digitalcredential.typemeta import CheckIntegrity, ErrInvalid, Integrity, Load, Ref, Static, parse_encoded
-from digitalcredential.typemeta.document import parse_encoded as parse_encoded_fn
+from pila_credential.digitalcredential.typemeta import CheckIntegrity, ErrInvalid, Integrity, Load, Ref, Static, parse_encoded
+from pila_credential.digitalcredential.typemeta.document import parse_encoded as parse_encoded_fn
 
 VCT42 = "https://betelgeuse.example.com/education_credential/v42"
 FIG30 = Path(__file__).parent / "testdata" / "figure30.json"

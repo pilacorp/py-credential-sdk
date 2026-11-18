@@ -1,6 +1,6 @@
-from did.helper import generate_ecdsa_did
-from did.model import CreateDID, DIDType
-from did.did_generator import DIDGenerator
+from pila_credential.did.helper import generate_ecdsa_did
+from pila_credential.did.model import CreateDID, DIDType
+from pila_credential.did.did_generator import DIDGenerator
 
 
 def test_generate_ecdsa_did_identifier():

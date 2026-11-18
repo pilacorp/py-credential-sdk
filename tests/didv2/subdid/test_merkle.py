@@ -1,4 +1,4 @@
-from didv2.subdid.merkle import merkle_proof, merkle_root, revoked_leaf, verify_proof
+from pila_credential.didv2.subdid.merkle import merkle_proof, merkle_root, revoked_leaf, verify_proof
 
 
 def fixture_leaves(n: int) -> list[str]:

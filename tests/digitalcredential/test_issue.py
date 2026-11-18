@@ -5,11 +5,11 @@ from datetime import datetime, timezone
 
 import pytest
 
-from digitalcredential.issue import issue
-from jose import json as jose_json
-from jose.errors import ErrInvalidArgument
-from jose.jws import jws as jose_jws
-from jose.sdjwt import Disclosure, recreate, split
+from pila_credential.digitalcredential.issue import issue
+from pila_credential.jose import json as jose_json
+from pila_credential.jose.errors import ErrInvalidArgument
+from pila_credential.jose.jws import jws as jose_jws
+from pila_credential.jose.sdjwt import Disclosure, recreate, split
 
 from dc_helpers import Ref, encode_json, test_key, test_request
 
