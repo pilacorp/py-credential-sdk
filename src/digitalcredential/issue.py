@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from jose import json as jose_json
@@ -19,7 +19,7 @@ from jose.sdjwt.path import Path, format_path
 from digitalcredential.claims import NEVER_DISCLOSABLE, TYP_DC_SD_JWT, is_str
 from digitalcredential.credential import Credential, compact_sd_jwt
 from digitalcredential.errors import combine, errors_is
-from digitalcredential.internal import sri
+from digitalcredential.internal import sri, uri
 from digitalcredential.issuerkey import SigningKey
 
 BACKGROUND = object()  # the context.Background() of this port: there is no cancellation
@@ -165,6 +165,15 @@ def _check(req: IssueRequest, claims: dict[str, Any]) -> None:
 
     if req.vct == "":
         raise _invalid("dc: VCT is required (draft-ietf-oauth-sd-jwt-vc-19 §2.2.2.3)")
+    # The Message is UTF-8 (RFC 7519 §7.1, RFC 8259 §8.1); a lone surrogate would be signed as U+FFFD.
+    for what, v in (("VCT", req.vct), ("Issuer", req.issuer)):
+        try:
+            v.encode("utf-8")
+        except UnicodeEncodeError:
+            raise _invalid(f"dc: {what} is not valid UTF-8") from None
+    # RFC 7519 §2: an iss holding ":" MUST be a URI, so issue never writes one that is not.
+    if ":" in req.issuer and not uri.valid(req.issuer):
+        raise _invalid('dc: Issuer holds ":" and is not a URI; use a URI, or a name with no ":"')
     for name, field_name, field_only, is_set in _REQUEST_CLAIMS:
         if name not in claims:
             continue
@@ -275,6 +284,8 @@ def _check_aud_shape(claims: dict[str, Any]) -> None:
 def _put_time(claims: dict[str, Any], name: str, t: datetime | None) -> None:
     """Write t as a NumericDate (RFC 7519 §2) in whole seconds, the fraction dropped, unless t is None."""
     if t is not None:
+        if t.tzinfo is None:  # a naive time is UTC everywhere else in the SDK, not local time
+            t = t.replace(tzinfo=timezone.utc)
         claims[name] = math.floor(t.timestamp())
 
 

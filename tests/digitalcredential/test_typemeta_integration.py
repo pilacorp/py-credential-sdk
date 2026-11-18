@@ -45,3 +45,36 @@ def test_valid_credential_verifies_and_violations_reject():
     # mandatory claim missing
     with pytest.raises(Exception, match="mandatory"):
         _issue(m, {"address": {}}, [])
+
+
+def test_iat_type_checked_and_future_rejected():
+    from datetime import timedelta
+
+    from digitalcredential.errors import DigitalCredentialError
+    from digitalcredential.verify_options import with_iat_check, with_reject_future_iat
+
+    k = new_key()
+    now = datetime.now(timezone.utc)
+
+    def make(**kw):
+        cred = issue(
+            IssueRequest(issuer=ISS, vct=VCT, issued_at=kw.get("iat", now), claims={"a": 1}),
+            SigningKey(signer=private_key_signer(k), public=k.public_key(), kid="k"),
+        )
+        return cred
+
+    res = StaticResolver(ISS, [PublicKey(k.public_key(), "k")])
+    parse(make().serialize()).verify(res, with_reject_future_iat())
+    with pytest.raises(DigitalCredentialError) as e:
+        parse(make(iat=now + timedelta(days=1)).serialize()).verify(res, with_reject_future_iat())
+    assert e.value.code == "NOT_YET_VALID"
+    seen = []
+    parse(make().serialize()).verify(res, with_iat_check(seen.append))
+    assert len(seen) == 1
+
+    def boom(iat):
+        raise RuntimeError("x")
+
+    with pytest.raises(DigitalCredentialError) as e:
+        parse(make().serialize()).verify(res, with_iat_check(boom))
+    assert e.value.code == "IAT_CHECK_FAILED"

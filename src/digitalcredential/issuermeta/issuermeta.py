@@ -12,9 +12,11 @@ addresses that are not globally reachable; a Config.http_client is trusted code.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
+from urllib.parse import unquote
 
 from cryptography.hazmat.primitives.asymmetric import ec as crypto_ec
 
@@ -134,6 +136,12 @@ def _metadata_url(iss: str):
     if "?" in iss or "#" in iss:
         raise ErrIssuerNotSupported(
             "issuermeta: iss has a query or fragment, which draft-ietf-oauth-sd-jwt-vc-19 §4 forbids"
+        )
+    # Dot-segments (also %2e, and decoded %2F, %5C, ";" parameters) make a server answer from outside
+    # /.well-known/, so whoever can publish a file on the origin could serve keys for a forged iss.
+    if any(seg.split(";", 1)[0] in (".", "..") for seg in re.split(r"[/\\]", unquote(u.path))):
+        raise ErrIssuerNotSupported(
+            "issuermeta: the path of iss has a dot-segment or a form a server may resolve as one"
         )
     # Split the raw iss, so the path reaches the server as the issuer wrote it.
     rest = iss[iss.index("://") + 3 :]

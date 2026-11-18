@@ -66,6 +66,8 @@ class VerifyConfig:
     types: Any = None
     types_optional: bool = False
     all_disclosures: bool = False
+    reject_future_iat: bool = False
+    verify_iat: Any = None
     now: datetime | None = None
     seen: set[str] = field(default_factory=set)
 
@@ -222,6 +224,29 @@ def with_status(s: StatusChecker | None) -> VerifyOption:
         c.status = s
 
     return VerifyOption("with_status", set_)
+
+
+def with_reject_future_iat() -> VerifyOption:
+    """Refuse a credential whose iat is later than the time of the check plus the clock skew
+    (NOT_YET_VALID). Not passed, a future iat verifies. An absent or concealed iat passes."""
+
+    def set_(c: VerifyConfig) -> None:
+        c.reject_future_iat = True
+
+    return VerifyOption("with_reject_future_iat", set_)
+
+
+def with_iat_check(verify: Any) -> VerifyOption:
+    """Add the caller's own check of iat. ``verify(iat)`` gets a datetime, None when the credential shows
+    none; it raises DigitalCredentialError to reject with that code, any other exception is
+    IAT_CHECK_FAILED. None is ErrPolicy."""
+
+    def set_(c: VerifyConfig) -> None:
+        if verify is None:
+            raise policy_err("with_iat_check(None); pass the function that checks iat")
+        c.verify_iat = verify
+
+    return VerifyOption("with_iat_check", set_)
 
 
 def without_status_check() -> VerifyOption:

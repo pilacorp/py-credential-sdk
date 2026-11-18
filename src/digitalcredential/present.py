@@ -104,6 +104,8 @@ def present(c: Credential | None, req: PresentRequest, ctx: Any = None) -> Crede
     kb = req.key_binding
     if kb is None:
         return Credential(sd_jwt)
+    if kb.issued_at is None:
+        raise ErrInvalidArgument("dc: KeyBinding.issued_at is required (RFC 9901 §4.3: the KB-JWT iat)")
 
     try:
         holder = holder_key(payload, r)
@@ -125,18 +127,12 @@ def present(c: Credential | None, req: PresentRequest, ctx: Any = None) -> Crede
         KBClaims(
             audience=kb.audience,
             nonce=kb.nonce,
-            issued_at=kb.issued_at if kb.issued_at is not None else _zero_time(),
+            issued_at=kb.issued_at,
             sd_hash=sd_hash(sd_jwt),
             extra=kb.claims,
         ),
     )
     return Credential(sd_jwt + binding)
-
-
-def _zero_time() -> datetime:
-    from datetime import timezone
-
-    return datetime.fromtimestamp(0, tz=timezone.utc)
 
 
 def _parsed(encoded: str) -> Disclosure:

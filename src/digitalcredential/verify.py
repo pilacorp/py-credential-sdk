@@ -209,6 +209,13 @@ def verify(c: Credential | None, issuers: Any, *opts: Any, ctx: Any = None) -> R
         raise _reject(E.NOT_YET_VALID, e) from e
     except Exception as e:
         raise _reject(E.MALFORMED, e) from e
+    # RFC 7519 §4.1.6: iat MUST be a NumericDate; absent or concealed is no fault.
+    try:
+        iat, has_iat = jose_jwt.date_claim(claims, "iat")
+    except Exception as e:
+        raise _reject(E.MALFORMED, e) from e
+    if cfg.reject_future_iat and has_iat and iat > cfg.now + cfg.skew:
+        raise _reject(E.NOT_YET_VALID, f"iat {iat.isoformat()} is later than the time of the check plus the clock skew")
     try:
         jose_jwt.check_aud(claims, cfg.cred_audience)
     except jose_jwt.ErrAudience as e:
@@ -237,6 +244,14 @@ def verify(c: Credential | None, issuers: Any, *opts: Any, ctx: Any = None) -> R
             E.VCT_NOT_ACCEPTED,
             "neither vct, aka_vcts nor a type its Type Metadata extends is a type in with_accepted_vcts",
         )
+
+    if cfg.verify_iat is not None:
+        try:
+            cfg.verify_iat(iat if has_iat else None)
+        except DigitalCredentialError:
+            raise
+        except Exception as e:
+            raise _reject(E.IAT_CHECK_FAILED, combine(f"with_iat_check: {e}", type(e))) from e
 
     if not st.present:
         return res
