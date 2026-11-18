@@ -45,3 +45,15 @@ def test_schema_validation_rejects():
     O.loaded_schema_loader = staticmethod(lambda u: json.dumps({"required": ["nope"]}).encode())
     with pytest.raises(ValueError, match="does not match schema"):
         h.validate_credential(cred, O())
+
+
+def test_non_finite_numbers_and_uncompressed_multikey_rejected():
+    from credential.common.util.json import strict_loads
+    from credential.common.verification_method.key_material import ec_pub_from_multikey_bytes
+
+    for bad in ('{"a": NaN}', '{"a": Infinity}', '{"a": 1e400}'):
+        with pytest.raises(ValueError):
+            strict_loads(bad)
+    assert strict_loads('{"a": 1.5}') == {"a": 1.5}
+    with pytest.raises(ValueError):
+        ec_pub_from_multikey_bytes(bytes([0x80, 0x24]) + b"\x04" + b"\x01" * 64)

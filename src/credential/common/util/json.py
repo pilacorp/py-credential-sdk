@@ -4,6 +4,23 @@ import json
 from typing import Any
 
 
+def _no_constant(name: str) -> Any:
+    raise ValueError(f"invalid JSON number {name}")
+
+
+def _strict_float(s: str) -> float:
+    v = float(s)
+    if v in (float("inf"), float("-inf")):
+        raise ValueError(f"JSON number {s[:20]!r} is out of range")
+    return v
+
+
+def strict_loads(raw: str | bytes | bytearray) -> Any:
+    """json.loads that refuses NaN, Infinity and numbers like 1e400, which json.dumps would write back as
+    invalid JSON."""
+    return json.loads(raw, parse_constant=_no_constant, parse_float=_strict_float)
+
+
 def to_map(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
         return value
@@ -13,7 +30,7 @@ def to_map(value: Any) -> dict[str, Any]:
         raw = value.encode("utf-8")
     else:
         raw = json.dumps(value).encode("utf-8")
-    obj = json.loads(raw)
+    obj = strict_loads(raw)
     if not isinstance(obj, dict):
         raise TypeError("value is not a JSON object")
     return obj

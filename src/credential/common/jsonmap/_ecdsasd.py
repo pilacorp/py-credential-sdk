@@ -77,6 +77,7 @@ def add_ecdsasd_base_proof(
             proof_config,
             mandatory_pointers or [],
             signer,
+            opts.vm_pub,  # the signer must hold the verification method's key
         )
         if isinstance(proof_value, dict):
             raise TypeError(

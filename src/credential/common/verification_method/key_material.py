@@ -192,8 +192,11 @@ def ec_pub_from_multikey_bytes(raw: bytes) -> ec.EllipticCurvePublicKey:
         curve = ec.SECP384R1()
     else:
         raise ValueError(f"multikey: unsupported multicodec prefix 0x{raw[:2].hex()}")
+    point = raw[2:]
+    if len(point) != (curve.key_size + 7) // 8 + 1 or point[0] not in (2, 3):
+        raise ValueError(f"multikey: invalid {curve.name} compressed point")  # uncompressed forms are not Multikey
     try:
-        return ec.EllipticCurvePublicKey.from_encoded_point(curve, raw[2:])
+        return ec.EllipticCurvePublicKey.from_encoded_point(curve, point)
     except ValueError as exc:
         raise ValueError(f"multikey: invalid {curve.name} compressed point") from exc
 

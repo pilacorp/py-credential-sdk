@@ -15,6 +15,7 @@ from credential.common.jsonmap._constants import (
     MULTIBASE_BASE58_BTC_PREFIX,
 )
 from credential.common.processor import canonicalize
+from credential.common.util.json import strict_loads
 from credential.common.signer.p256 import P256Provider
 from credential.common.verification_method import resolve_signing_vm, vm_key_kind
 from credential.common.verification_method.key_material import ec_pub_from_vm
@@ -77,7 +78,7 @@ class JSONCredential(Credential):
             raw = raw.encode("utf-8")
         if not _is_json_object(raw):
             raise ValueError("invalid JSON format")
-        m = json.loads(raw)
+        m = strict_loads(raw)
         helper.require_credential_properties(m)
         e = cls(m)
         e._execute_options(*opts)
@@ -176,7 +177,7 @@ class JSONCredential(Credential):
         return self._jm().to_map()
 
     def to_json(self) -> str:
-        return json.dumps(self.serialize(), separators=(",", ":"), ensure_ascii=False)
+        return json.dumps(self.serialize(), separators=(",", ":"), ensure_ascii=False, allow_nan=False)
 
     def hash(self) -> str:
         """Hex SHA-256 of the URDNA2015 canonical full credential, proof included (the Merkle leaf).
@@ -222,6 +223,6 @@ def _is_json_object(raw: bytes) -> bool:
     if not raw:
         return False
     try:
-        return isinstance(json.loads(raw), dict)
-    except (UnicodeDecodeError, json.JSONDecodeError):
+        return isinstance(strict_loads(raw), dict)
+    except (UnicodeDecodeError, ValueError):
         return False

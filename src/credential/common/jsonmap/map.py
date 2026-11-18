@@ -53,7 +53,7 @@ class JSONMap:
         if self.data is None:
             raise ValueError("JSONMap is nil")
         # Go json.Marshal: sorted keys, raw UTF-8, <, >, & and U+2028/2029 escaped.
-        text = json.dumps(self.data, separators=(",", ":"), ensure_ascii=False, sort_keys=True)
+        text = json.dumps(self.data, separators=(",", ":"), ensure_ascii=False, sort_keys=True, allow_nan=False)
         for ch, esc in (("<", "\\u003c"), (">", "\\u003e"), ("&", "\\u0026"), ("\u2028", "\\u2028"), ("\u2029", "\\u2029")):
             text = text.replace(ch, esc)
         return text.encode("utf-8")
