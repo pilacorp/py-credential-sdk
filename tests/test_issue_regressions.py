@@ -89,3 +89,22 @@ def test_valid_from_rfc3339_strict():
         with pytest.raises(ValueError):
             h.check_validity_period("c", bad, "", __import__("datetime").timedelta(0))
     h.check_validity_period("c", "2024-01-01T00:00:00Z", "", __import__("datetime").timedelta(0))
+
+
+def test_ecdsasd_signer_must_hold_vm_key():
+    from cryptography.hazmat.primitives.asymmetric import ec
+
+    from pila_credential.credential.common.jsonmap import JSONMap
+    from pila_credential.credential.common.signer.p256 import P256Provider
+
+    a = P256Provider.from_hex("1f2d3c4b5a69788796a5b4c3d2e1f00112233445566778899aabbccddeeff001")
+    b = P256Provider.from_hex("11" * 32)
+    pub = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), a.public_key_uncompressed())
+
+    def doc():
+        return {"@context": ["https://www.w3.org/ns/credentials/v2"], "type": ["VerifiableCredential"],
+                "issuer": "did:example:i", "credentialSubject": {"id": "did:example:s"}}
+
+    JSONMap(doc()).add_ecdsasd_base_proof(a, "did:example:i#key-1", "assertionMethod", [], vm_pub=pub)
+    with pytest.raises(ValueError, match="does not verify"):
+        JSONMap(doc()).add_ecdsasd_base_proof(b, "did:example:i#key-1", "assertionMethod", [], vm_pub=pub)
