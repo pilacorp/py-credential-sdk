@@ -36,3 +36,25 @@ def test_slow_body_ends_within_timeout():
         )
     assert time.monotonic() - t < 2
     srv.close()
+
+
+def test_oversized_headers_refused_while_streaming():
+    srv = socket.socket()
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(1)
+
+    def serve():
+        c, _ = srv.accept()
+        c.recv(4096)
+        try:
+            c.sendall(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n")
+            for i in range(80):
+                c.sendall(b"X-%d: %s\r\n" % (i, b"a" * 60000))
+        except OSError:
+            pass
+
+    threading.Thread(target=serve, daemon=True).start()
+    with pytest.raises(sh.FetchError):
+        sh.get(sh.Client(address_check=None), f"http://127.0.0.1:{srv.getsockname()[1]}/", ["application/json"],
+               sh.Limits(timeout_seconds=5, allow_http=True))
+    srv.close()

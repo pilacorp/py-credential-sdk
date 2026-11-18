@@ -1,61 +1,78 @@
 from __future__ import annotations
 
+import http.client
 import json
-import time
-import urllib.error
+import socket
+import threading
 import urllib.parse
-import urllib.request
 from typing import Any
 
 MAX_RESPONSE_BYTES = 16 * 1024 * 1024
 TIMEOUT_SECONDS = 30.0
 
 
-class _NoRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, *args: Any, **kwargs: Any) -> None:
-        # a redirect would resend the POST as a bodiless GET to another host
-        return None
-
-
-_opener = urllib.request.build_opener(_NoRedirect)
-
-
 class JsonRpc:
     def __init__(self, url: str, timeout: float = TIMEOUT_SECONDS) -> None:
         if not url:
             raise ValueError("RPC URL is required")
-        if urllib.parse.urlparse(url).scheme not in ("http", "https"):
-            # urllib would happily open file:// and ftp:// URLs
+        u = urllib.parse.urlsplit(url)
+        if u.scheme not in ("http", "https") or not u.hostname:
+            # file:// and ftp:// must never be opened
             raise ValueError("RPC URL must be http(s)")
         self.url = url
+        self._u = u
         self.timeout = timeout
         self._id = 0
 
     def call(self, method: str, params: list[Any]) -> Any:
         self._id += 1
         body = json.dumps({"jsonrpc": "2.0", "id": self._id, "method": method, "params": params}).encode("utf-8")
-        req = urllib.request.Request(self.url, data=body, headers={"Content-Type": "application/json"})
-        deadline = time.monotonic() + self.timeout
+        u = self._u
+        cls = http.client.HTTPSConnection if u.scheme == "https" else http.client.HTTPConnection
+        socks: list[socket.socket] = []  # http.client drops conn.sock once a Connection: close response arrives
+
+        class Conn(cls):  # type: ignore[valid-type, misc]
+            def connect(self) -> None:
+                super().connect()
+                socks.append(self.sock)
+
+        conn = Conn(u.hostname, u.port, timeout=self.timeout)
+        expired = threading.Event()
+
+        def expire() -> None:
+            # one deadline for connect, headers and body: shut the socket down so a blocked recv returns
+            expired.set()
+            for sock in socks:
+                try:
+                    sock.shutdown(socket.SHUT_RDWR)
+                except OSError:
+                    pass
+            conn.close()
+
+        timer = threading.Timer(self.timeout, expire)
+        timer.daemon = True
+        timer.start()
         try:
-            with _opener.open(req, timeout=self.timeout) as resp:  # noqa: S310
-                chunks, size = [], 0
-                while True:
-                    # ponytail: deadline checked between recvs; one stalled recv is bounded by the socket timeout, so worst case ~2x timeout
-                    if time.monotonic() > deadline:
-                        raise ValueError("RPC call timed out")
-                    chunk = resp.read1(65536)  # read() would block until 64 KiB arrive
-                    if not chunk:
-                        break
-                    size += len(chunk)
-                    if size > MAX_RESPONSE_BYTES:
-                        raise ValueError("RPC response too large")
-                    chunks.append(chunk)
-        except urllib.error.HTTPError as exc:
-            raise ValueError(f"RPC HTTP error {exc.code}") from exc
-        except urllib.error.URLError as exc:
-            raise ValueError(f"RPC request failed: {exc.reason}") from exc
+            conn.request("POST", (u.path or "/") + ("?" + u.query if u.query else ""), body, {"Content-Type": "application/json"})
+            resp = conn.getresponse()  # http.client never follows redirects
+            if resp.status != 200:
+                raise ValueError(f"RPC HTTP error {resp.status}")
+            data = resp.read(MAX_RESPONSE_BYTES + 1)
+        except (OSError, http.client.HTTPException, ValueError) as exc:
+            if expired.is_set():
+                raise ValueError("RPC call timed out") from exc
+            if isinstance(exc, ValueError):
+                raise
+            raise ValueError(f"RPC request failed: {type(exc).__name__}") from exc
+        finally:
+            timer.cancel()
+            conn.close()
+        if expired.is_set():  # a shut-down socket can end the read early without an error
+            raise ValueError("RPC call timed out")
+        if len(data) > MAX_RESPONSE_BYTES:
+            raise ValueError("RPC response too large")
         try:
-            payload = json.loads(b"".join(chunks))
+            payload = json.loads(data)
         except ValueError as exc:
             raise ValueError("RPC response is not valid JSON") from exc
         if not isinstance(payload, dict):

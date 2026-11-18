@@ -320,6 +320,34 @@ def _dial(host: str, port_: int, timeout: float, check, deadline: float | None =
     raise err or OSError(f"no address for {host}")
 
 
+class _CappedFP:
+    """The response file while its status line and headers are read: refuses more than _MAX_HEADER_BYTES in
+    total as they stream in, where http.client alone allows 100 lines of 64 KiB."""
+
+    def __init__(self, fp) -> None:  # noqa: ANN001
+        self._fp, self._n = fp, 0
+
+    def readline(self, limit: int = -1) -> bytes:
+        line = self._fp.readline(limit)
+        self._n += len(line)
+        if self._n > _MAX_HEADER_BYTES:
+            raise http.client.HTTPException("response headers over 65536 bytes")
+        return line
+
+    def __getattr__(self, name: str):  # noqa: ANN204
+        return getattr(self._fp, name)
+
+
+class _CappedResponse(http.client.HTTPResponse):
+    def begin(self) -> None:
+        fp = self.fp
+        self.fp = _CappedFP(fp)
+        try:
+            super().begin()
+        finally:
+            self.fp = fp
+
+
 def _socket_transport(client: Client) -> Transport:
     check = client.address_check
     ctx = client.ssl_context or ssl.create_default_context()
@@ -371,6 +399,7 @@ def _socket_transport(client: Client) -> Transport:
         def guard(e: Exception) -> Exception:
             return TimeoutError("deadline exceeded") if expired.is_set() else e
 
+        conn.response_class = _CappedResponse
         timer.start()
         try:
             target = (u.path or "/") + ("?" + u.query if u.query else "")
@@ -380,9 +409,6 @@ def _socket_transport(client: Client) -> Transport:
             close()
             raise guard(e) from e
         hdrs = resp.getheaders()
-        if sum(len(k) + len(v) + 4 for k, v in hdrs) > _MAX_HEADER_BYTES:
-            close()
-            raise FetchError("safehttp: Get: response headers over 65536 bytes")
 
         def read(n: int) -> bytes:
             try:
