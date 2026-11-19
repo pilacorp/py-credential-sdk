@@ -9,8 +9,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Protocol
 
-from pila_credential.digitalcredential.internal import jsonint, safehttp, uri
-from pila_credential.digitalcredential.internal.safehttp import Client, Limits
+from pila_credential.digitalcredential._internal import jsonint, safehttp, uri
+from pila_credential.digitalcredential._internal.safehttp import Client, Limits
 from pila_credential.digitalcredential.issuerkey import select
 from pila_credential.digitalcredential.statuslist.cache import CacheKey, ListCache
 from pila_credential.digitalcredential.statuslist.errors import (

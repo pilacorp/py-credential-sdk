@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from pila_credential.digitalcredential.internal import jsonint, sri, uri
-from pila_credential.digitalcredential.internal.safehttp import https_url
+from pila_credential.digitalcredential._internal import jsonint, sri, uri
+from pila_credential.digitalcredential._internal.safehttp import https_url
 from pila_credential.jose import json as jose_json
 from pila_credential.jose.json import JsonNumber
 from pila_credential.digitalcredential.typemeta.color import rgb_color

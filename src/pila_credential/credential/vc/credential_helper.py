@@ -5,6 +5,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
 import jsonschema
+import referencing
+import referencing.exceptions
 
 from pila_credential.credential.common.credential_status.credential_status import fetch_and_check_revocation
 from pila_credential.credential.common.util.json import shallow_copy_obj
@@ -148,13 +150,6 @@ def check_expiration(c: CredentialData, leeway: timedelta) -> None:
     check_validity_period("credential", valid_from, valid_until, leeway)
 
 
-def _issuer_id(c: CredentialData) -> str:
-    v = c.get("issuer")
-    if isinstance(v, dict):
-        v = v.get("id")
-    return v if isinstance(v, str) else ""
-
-
 def _status_list_index(raw: str) -> int:
     # int() also takes " 5", "1_0" and non-ASCII digits
     if not (raw.isascii() and raw.isdigit()):
@@ -163,22 +158,25 @@ def _status_list_index(raw: str) -> int:
 
 
 def _verify_status_list(resp: Any, c: CredentialData, options: Any) -> None:
-    """The list credential is trusted only as far as a credential: its proof must verify, it must be issued
-    by the issuer of the credential it serves, be a BitstringStatusListCredential and be within its validity."""
+    """The list credential is trusted only as far as a credential: its proof must verify, it must be a
+    BitstringStatusListCredential and be within its validity."""
     from pila_credential.credential.vc import credential as vc
 
     lc = resp.data
-    if not _issuer_id(c) or lc.issuer != _issuer_id(c):
-        raise ValueError("status list credential issuer is not the credential's issuer")
+    # BSL §3.2: the list's issuer may differ from the credential's; which issuers to trust is the verifier's call.
     if "BitstringStatusListCredential" not in lc.type:
         raise ValueError("status list credential type is not BitstringStatusListCredential")
     if lc.credential_subject.type != "BitstringStatusList":
         raise ValueError("status list credentialSubject type is not BitstringStatusList")
-    check_validity_period("status list credential", lc.valid_from, lc.valid_until, timedelta(0))
+    check_validity_period(
+        "status list credential", lc.valid_from, lc.valid_until, options.leeway if options is not None else timedelta(0)
+    )
     opts = [vc.with_verify_proof()]
     if options is not None:
         opts += [vc.with_resolver(options.resolver), vc.with_base_url(options.did_base_url)]
-    vc.parse_credential(json.dumps(resp.raw_data).encode("utf-8"), *opts)
+    # parse_json_credential, not parse_credential: that one dispatches on `id` and would verify only an
+    # enveloped vc+jwt named there, leaving the JSON body (the bits) unchecked.
+    vc.parse_json_credential(json.dumps(resp.raw_data).encode("utf-8"), *opts)
 
 
 def check_revocation(c: CredentialData, options: Any = None) -> None:
@@ -617,8 +615,11 @@ def validate_credential(m: CredentialData, opts: Any) -> None:
         except ValueError as exc:
             raise ValueError(f"failed to parse schema: {exc}") from exc
         try:
-            jsonschema.validate(instance=copy_map, schema=schema_doc)
+            # an empty registry: a $ref cannot leave the schema (no https:// or file:// fetch)
+            jsonschema.validate(instance=copy_map, schema=schema_doc, registry=referencing.Registry())
         except jsonschema.SchemaError as exc:
             raise ValueError(f"invalid schema: {exc.message}") from exc
+        except referencing.exceptions.Unresolvable as exc:
+            raise ValueError(f"invalid schema: $ref {exc.ref!r} is not in the schema") from exc
         except jsonschema.ValidationError as exc:
             raise ValueError(f"credential does not match schema: {exc.message}") from exc

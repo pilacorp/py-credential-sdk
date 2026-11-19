@@ -10,7 +10,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "_helpers")
 from dcsub_http import Reply, Server, redirect, routed_client  # noqa: E402
 
 from pila_credential.digitalcredential import issuermeta as im  # noqa: E402
-from pila_credential.digitalcredential.internal.safehttp import StatusError, as_, is_  # noqa: E402
+from pila_credential.digitalcredential._internal.safehttp import StatusError, as_, is_  # noqa: E402
 from pila_credential.digitalcredential.issuerkey import ErrIssuerNotSupported, ErrNoUsableKey  # noqa: E402
 from pila_credential.jose.errors import ErrInvalidArgument  # noqa: E402
 

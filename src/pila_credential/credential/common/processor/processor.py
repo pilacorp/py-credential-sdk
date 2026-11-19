@@ -79,7 +79,7 @@ def _fetch_remote_context(url: str) -> Any:
     """An unknown @context is attacker-chosen and fetched before the signature check, so it goes through
     safehttp: https only, no internal addresses, bounded time, size and redirects. The result is cached
     briefly so one verify fetches each URL once (pyld asks for it more than once)."""
-    from pila_credential.digitalcredential.internal import safehttp
+    from pila_credential.digitalcredential._internal import safehttp
 
     now = time.monotonic()
     with _remote_lock:

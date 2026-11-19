@@ -270,24 +270,25 @@ def run_options(
     verify_proof: Callable[[], None] | None = None,
 ) -> None:
     """Schema / revocation / proof checks (first failure wins), then the validity window (Go executeOptions)."""
-    errors: list[str] = []
+    errors: list[tuple[str, Exception]] = []
     if options.is_validate_schema:
         try:
             helper.validate_credential(credential_data, options)
         except Exception as exc:
-            errors.append(f"validate credential: {exc}")
+            errors.append(("validate credential", exc))
     if not errors and options.is_verify_proof and verify_proof is not None:
         try:
             verify_proof()
         except Exception as exc:
-            errors.append(f"verify proof: {exc}")
+            errors.append(("verify proof", exc))
     if not errors and options.is_check_revocation:
         try:
             helper.check_revocation(credential_data, options)
         except Exception as exc:
-            errors.append(f"check revocation: {exc}")
+            errors.append(("check revocation", exc))
     if errors:
-        raise ValueError(f"credential verification failed: {errors[0]}")
+        step, cause = errors[0]
+        raise ValueError(f"credential verification failed: {step}: {cause}") from cause
     if options.is_check_expiration:
         try:
             helper.check_expiration(credential_data, options.leeway)

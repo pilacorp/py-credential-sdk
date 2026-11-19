@@ -63,7 +63,7 @@ def test_decrypt_invalid_utf8():
 
 
 def test_dot_segment_iss_and_huge_max_age():
-    from pila_credential.digitalcredential.internal.httpcache import _delta_seconds
+    from pila_credential.digitalcredential._internal.httpcache import _delta_seconds
     from pila_credential.digitalcredential.issuermeta import issuermeta as im
 
     for iss in ("https://e.com/a/../b", "https://e.com/%2e%2e/x"):

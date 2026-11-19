@@ -6,7 +6,7 @@ from __future__ import annotations
 import base64
 import hashlib
 
-from pila_credential.digitalcredential.internal import sri
+from pila_credential.digitalcredential._internal import sri
 from pila_credential.digitalcredential.typemeta.errors import ErrInvalid
 
 

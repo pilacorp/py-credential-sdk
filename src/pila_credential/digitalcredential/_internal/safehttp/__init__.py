@@ -9,18 +9,19 @@ resolution and on every redirect. Redirects are followed by `get` itself, never 
 
 from __future__ import annotations
 
+import concurrent.futures
 import http.client
 import socket
 import ssl
-import threading
 import time
 from dataclasses import dataclass, field
 from typing import Callable, Iterable, Mapping
 from urllib.parse import SplitResult, urljoin, urlsplit
 
-from pila_credential.digitalcredential.internal.safehttp.blocked import blocked, blocked_host, parse_addr
+from pila_credential._deadline import Deadline
+from pila_credential.digitalcredential._internal.safehttp.blocked import blocked, blocked_host, parse_addr
 
-_MAX_HEADER_BYTES = 64 << 10  # whole header block, checked after getresponse (http.client bounds it to ~6 MiB)
+_MAX_HEADER_BYTES = 64 << 10  # whole header block, counted line by line as it streams in (_CappedFP)
 
 
 # ---------------------------------------------------------------- errors
@@ -294,9 +295,22 @@ def new_client() -> Client:
     return Client()
 
 
-def _dial(host: str, port_: int, timeout: float, check, deadline: float | None = None) -> socket.socket:
+_RESOLVER = concurrent.futures.ThreadPoolExecutor(max_workers=8, thread_name_prefix="safehttp-dns")
+
+
+def _resolve(host: str, port_: int, deadline: float | None) -> list:
+    # getaddrinfo takes no timeout, so the lookup runs in a worker and the caller waits only until the deadline.
+    fut = _RESOLVER.submit(socket.getaddrinfo, host, port_, type=socket.SOCK_STREAM)
+    left = None if deadline is None else max(deadline - time.monotonic(), 0)
+    try:
+        return fut.result(timeout=left)
+    except concurrent.futures.TimeoutError:
+        raise TimeoutError("deadline exceeded while resolving the host") from None
+
+
+def _dial(host: str, port_: int, timeout: float, check, deadline: float | None = None, dl: Deadline | None = None) -> socket.socket:
     err: Exception | None = None
-    for family, stype, proto, _, sa in socket.getaddrinfo(host, port_, type=socket.SOCK_STREAM):
+    for family, stype, proto, _, sa in _resolve(host, port_, deadline):
         ip = sa[0]
         if check is not None:
             try:
@@ -313,6 +327,8 @@ def _dial(host: str, port_: int, timeout: float, check, deadline: float | None =
         try:
             s.settimeout(min(left, 5.0))  # Go dialer: 5 s
             s.connect(sa)
+            if dl is not None:
+                dl.track(s)
             return s
         except OSError as e:
             s.close()
@@ -357,50 +373,37 @@ def _socket_transport(client: Client) -> Transport:
         p = int(port(u))
         host = hostname(u)
         deadline = time.monotonic() + timeout
-        expired = threading.Event()
-        socks: list[socket.socket] = []  # http.client drops conn.sock once a Connection: close response arrives
-
-        def expire() -> None:
-            # The deadline covers connect, headers and body however slowly the server sends:
-            # a recv timeout only bounds one recv, so the socket is shut down at the deadline.
-            expired.set()
-            for sock in socks:
-                try:
-                    sock.shutdown(socket.SHUT_RDWR)
-                except OSError:
-                    pass
-                sock.close()
-
-        timer = threading.Timer(timeout, expire)
-        timer.daemon = True
+        dl = Deadline(timeout)
 
         if u.scheme == "https":
 
             class Conn(http.client.HTTPSConnection):
                 def connect(self) -> None:
-                    raw = _dial(host, p, timeout, check, deadline)
-                    socks.append(raw)
-                    self.sock = ctx.wrap_socket(raw, server_hostname=host)
+                    raw = _dial(host, p, timeout, check, deadline, dl)
+                    # register both sockets, and the handshake runs under the deadline too
+                    tls = ctx.wrap_socket(raw, server_hostname=host, do_handshake_on_connect=False)
+                    dl.track(tls)
+                    tls.do_handshake()
+                    self.sock = tls
 
             conn: http.client.HTTPConnection = Conn(host, p, timeout=timeout, context=ctx)
         else:
 
             class Plain(http.client.HTTPConnection):
                 def connect(self) -> None:
-                    self.sock = _dial(host, p, timeout, check, deadline)
-                    socks.append(self.sock)
+                    self.sock = _dial(host, p, timeout, check, deadline, dl)
 
             conn = Plain(host, p, timeout=timeout)
 
         def close() -> None:
-            timer.cancel()
+            dl.cancel()
             conn.close()
 
         def guard(e: Exception) -> Exception:
-            return TimeoutError("deadline exceeded") if expired.is_set() else e
+            return TimeoutError("deadline exceeded") if dl.expired.is_set() else e
 
         conn.response_class = _CappedResponse
-        timer.start()
+        dl.start()
         try:
             target = (u.path or "/") + ("?" + u.query if u.query else "")
             conn.request("GET", target, headers={**headers, "Connection": "close"})

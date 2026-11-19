@@ -18,7 +18,7 @@ pytest
 | [`pila_credential.didcomm`](src/pila_credential/didcomm/README.md) | DIDComm JWE encrypt / decrypt | `didcomm` |
 | [`pila_credential.jose`](src/pila_credential/jose/README.md) | JWK, JWS, JWT, SD-JWT primitives | `jose` |
 
-Go parts with no Python package: none known; check against the Go tree when it changes.
+Go parts with no Python package: `digitalcredential/didresolver` (W3C DID Resolution client). Check against the Go tree when it changes.
 
 ## Minimal issue / verify
 
@@ -29,10 +29,10 @@ Go parts with no Python package: none known; check against the Go tree when it c
 - `snake_case` names; options are `with_*` functions passed positionally.
 - Errors are raised exceptions, not returned values. `digitalcredential` raises `DigitalCredentialError` with a `.code`.
 - `didv2.DIDGenerator` takes `**overrides` of `DIDConfig` fields per call (`did_smc_addr`, `chain_id`, `nonce`, ...). Overrides apply to both the issuer signature and the transaction.
-- Bitstring Status List is read left-most-bit-first, the list credential's proof and issuer are verified, and the list must be ≥ 16 KB (Go#187 is still open upstream).
+- Bitstring Status List is read left-most-bit-first, the list credential's proof is verified (which issuers to trust is left to the caller), and the list must be ≥ 16 KB (Go#187 is still open upstream).
 - `parse_credential_with_validation` needs a `schema_loader`; schema URLs from a credential are never fetched.
 - A naive `datetime` is UTC everywhere.
 
 ## Network access
 
-Only `digitalcredential` issuer metadata / status list / Type Metadata resolvers, status list credentials (`credential`), unknown JSON-LD `@context`s, `did`/`didv2` JSON-RPC and the DID resolver touch the network. Fetches of untrusted URLs go through `digitalcredential.internal.safehttp`: https only, no non-global addresses, bounded time, size and redirects.
+Network is touched by: the `digitalcredential` issuer metadata, status list and Type Metadata resolvers; status list credentials and the DID resolver in `credential`; unknown JSON-LD `@context`s; and `didv2` JSON-RPC. The legacy `did` package makes no network call. Fetches in `digitalcredential` and for unknown `@context`s go through `digitalcredential._internal.safehttp` (https only, no non-global addresses, one deadline for DNS, connect, TLS, headers and body, bounded size and redirects). Status list credentials for JSON-LD VCs are fetched with `urllib` (https/http only, size-capped, no address filter).

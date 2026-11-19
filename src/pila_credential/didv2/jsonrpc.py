@@ -3,9 +3,10 @@ from __future__ import annotations
 import http.client
 import json
 import socket
-import threading
 import urllib.parse
 from typing import Any
+
+from pila_credential._deadline import Deadline
 
 MAX_RESPONSE_BYTES = 16 * 1024 * 1024
 TIMEOUT_SECONDS = 30.0
@@ -29,29 +30,23 @@ class JsonRpc:
         body = json.dumps({"jsonrpc": "2.0", "id": self._id, "method": method, "params": params}).encode("utf-8")
         u = self._u
         cls = http.client.HTTPSConnection if u.scheme == "https" else http.client.HTTPConnection
-        socks: list[socket.socket] = []  # http.client drops conn.sock once a Connection: close response arrives
+        dl = Deadline(self.timeout)
 
         class Conn(cls):  # type: ignore[valid-type, misc]
             def connect(self) -> None:
-                super().connect()
-                socks.append(self.sock)
+                if cls is http.client.HTTPSConnection:
+                    raw = socket.create_connection((self.host, self.port), self.timeout)
+                    dl.track(raw)
+                    tls = self._context.wrap_socket(raw, server_hostname=self.host, do_handshake_on_connect=False)
+                    dl.track(tls)
+                    tls.do_handshake()
+                    self.sock = tls
+                else:
+                    super().connect()
+                    dl.track(self.sock)
 
         conn = Conn(u.hostname, u.port, timeout=self.timeout)
-        expired = threading.Event()
-
-        def expire() -> None:
-            # one deadline for connect, headers and body: shut the socket down so a blocked recv returns
-            expired.set()
-            for sock in socks:
-                try:
-                    sock.shutdown(socket.SHUT_RDWR)
-                except OSError:
-                    pass
-            conn.close()
-
-        timer = threading.Timer(self.timeout, expire)
-        timer.daemon = True
-        timer.start()
+        dl.start()
         try:
             conn.request("POST", (u.path or "/") + ("?" + u.query if u.query else ""), body, {"Content-Type": "application/json"})
             resp = conn.getresponse()  # http.client never follows redirects
@@ -59,15 +54,15 @@ class JsonRpc:
                 raise ValueError(f"RPC HTTP error {resp.status}")
             data = resp.read(MAX_RESPONSE_BYTES + 1)
         except (OSError, http.client.HTTPException, ValueError) as exc:
-            if expired.is_set():
+            if dl.expired.is_set() or isinstance(exc, TimeoutError):
                 raise ValueError("RPC call timed out") from exc
             if isinstance(exc, ValueError):
                 raise
             raise ValueError(f"RPC request failed: {type(exc).__name__}") from exc
         finally:
-            timer.cancel()
+            dl.cancel()
             conn.close()
-        if expired.is_set():  # a shut-down socket can end the read early without an error
+        if dl.expired.is_set():  # a shut-down socket can end the read early without an error
             raise ValueError("RPC call timed out")
         if len(data) > MAX_RESPONSE_BYTES:
             raise ValueError("RPC response too large")

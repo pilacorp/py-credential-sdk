@@ -29,7 +29,7 @@ from pila_credential.digitalcredential.errors import (
     errors_is,
     policy_err,
 )
-from pila_credential.digitalcredential.internal import jsonint, sri, uri
+from pila_credential.digitalcredential._internal import jsonint, sri, uri
 from pila_credential.digitalcredential.issuerkey import ErrIssuerNotSupported, ErrNoUsableKey, select
 from pila_credential.digitalcredential.verify_options import KeyBindingMode, VerifyConfig, new_verify_config
 

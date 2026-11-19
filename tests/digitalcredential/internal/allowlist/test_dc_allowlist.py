@@ -1,6 +1,6 @@
 import pytest
 
-from pila_credential.digitalcredential.internal import allowlist as al
+from pila_credential.digitalcredential._internal import allowlist as al
 
 HINTS = al.Hints(all="leave empty", finer="wrap it")
 

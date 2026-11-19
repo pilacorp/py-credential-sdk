@@ -4,7 +4,7 @@ digitalcredential.errors.errors_is); none is jose.ErrInvalidArgument."""
 
 from __future__ import annotations
 
-from pila_credential.digitalcredential.internal.safehttp import (
+from pila_credential.digitalcredential._internal.safehttp import (
     ErrBlockedAddress,
     ErrBodyTooLarge,
     ErrContentTypeNotAccepted,

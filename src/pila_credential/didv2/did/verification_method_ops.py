@@ -15,6 +15,10 @@ from pila_credential.didv2.did.did import (
 )
 
 
+class ErrAlreadyRevoked(ValueError):
+    """Go did.ErrAlreadyRevoked: revoke or rotate of a method that already carries `revoked`."""
+
+
 def find_verification_method(doc: dict[str, Any] | None, id_or_fragment: str) -> dict[str, Any] | None:
     if not doc:
         return None
@@ -83,7 +87,7 @@ def rotate_verification_method(
     if not old:
         raise ValueError(f"verification method not found: {old_kid}")
     if old.get("revoked") is not None:
-        raise ValueError(f"verification method {old['id']!r} is already revoked")
+        raise ErrAlreadyRevoked(f"verification method {old['id']!r} is already revoked")
     old_id = old["id"]
     purposes = _purposes_of_kid(doc, old_id)
     new_id = add_verification_method(doc, new_vm, purposes)
@@ -118,7 +122,7 @@ def revoke_verification_method(
             _ensure_context(doc, CID_CONTEXT)
             return
         at = rfc3339_nano(vm["revoked"])
-        raise ValueError(
+        raise ErrAlreadyRevoked(
             f"verification method {vm['id']!r} is already revoked at {at} (reason: {vm.get('revocationReason', '')})"
         )
     vm["revoked"] = rfc3339_nano(revoked_at)

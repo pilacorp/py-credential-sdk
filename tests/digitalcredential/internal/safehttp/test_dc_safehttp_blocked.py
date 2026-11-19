@@ -1,4 +1,4 @@
-from pila_credential.digitalcredential.internal.safehttp.blocked import blocked, parse_addr
+from pila_credential.digitalcredential._internal.safehttp.blocked import blocked, parse_addr
 
 
 def test_blocked_special_purpose_addresses() -> None:

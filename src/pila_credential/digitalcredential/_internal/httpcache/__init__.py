@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import copy
 
-from pila_credential.digitalcredential.internal import safehttp
-from pila_credential.digitalcredential.internal.safehttp import Client, Headers, Limits
+from pila_credential.digitalcredential._internal import safehttp
+from pila_credential.digitalcredential._internal.safehttp import Client, Headers, Limits
 
 _LIMIT = 1 << 31  # RFC 9111 §1.2.2: delta-seconds capped at 2^31
 
@@ -69,6 +69,6 @@ def _delta_seconds(s: str) -> int | None:
     """1*DIGIT (ASCII), capped at 2^31; None when invalid."""
     if not s or not all("0" <= c <= "9" for c in s):
         return None
-    if len(s) > 10:  # int() of thousands of digits raises ValueError; anything this long is past the cap
+    if len(s.lstrip("0")) > 10:  # int() of thousands of digits raises ValueError; anything this long is past the cap
         return _LIMIT
     return min(int(s), _LIMIT)

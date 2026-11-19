@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 import ipaddress
 
-from pila_credential.digitalcredential.internal import safehttp
-from pila_credential.digitalcredential.internal.safehttp import hostname, https_url, parse, port as url_port
+from pila_credential.digitalcredential._internal import safehttp
+from pila_credential.digitalcredential._internal.safehttp import hostname, https_url, parse, port as url_port
 
 
 @dataclass

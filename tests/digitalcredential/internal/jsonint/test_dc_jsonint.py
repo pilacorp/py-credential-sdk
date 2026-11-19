@@ -1,6 +1,6 @@
 import pytest
 
-from pila_credential.digitalcredential.internal import jsonint
+from pila_credential.digitalcredential._internal import jsonint
 
 
 @pytest.mark.parametrize("n,want", [("7", 7), ("7.0", 7), ("7e0", 7), ("70e-1", 7), ("0", 0), ("-0", 0), ("0.0e9", 0),

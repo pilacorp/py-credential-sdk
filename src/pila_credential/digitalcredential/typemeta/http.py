@@ -5,11 +5,11 @@ from datetime import datetime, timedelta, timezone
 from typing import Callable
 from urllib.parse import urlparse
 
-from pila_credential.digitalcredential.internal import uri
-from pila_credential.digitalcredential.internal.allowlist import Hints, check, new as allowlist_new, redirects_any, redirects_to
-from pila_credential.digitalcredential.internal.httpcache import freshness
-from pila_credential.digitalcredential.internal import safehttp
-from pila_credential.digitalcredential.internal.safehttp import (
+from pila_credential.digitalcredential._internal import uri
+from pila_credential.digitalcredential._internal.allowlist import Hints, check, new as allowlist_new, redirects_any, redirects_to
+from pila_credential.digitalcredential._internal.httpcache import freshness
+from pila_credential.digitalcredential._internal import safehttp
+from pila_credential.digitalcredential._internal.safehttp import (
     Client,
     ErrBlockedAddress,
     ErrBodyTooLarge,

@@ -33,6 +33,7 @@ class DIDGenerator:
         Config(rpc_url=cfg.rpc, contract_address=cfg.did_smc_addr, chain_id=cfg.chain_id).validate()
         self.cfg = cfg
         self._chain = chain
+        self._chains: dict[tuple[str, str], Any] = {}  # one client per (rpc, contract): did_smc_addr is overridable per call
 
     # ------------------------------------------------------------------ config / chain
 
@@ -46,11 +47,15 @@ class DIDGenerator:
         return cfg
 
     def _get_chain(self, cfg: DIDConfig) -> Any:
-        if self._chain is None:
+        if self._chain is not None:  # injected by the caller: used for every call
+            return self._chain
+        key = (cfg.rpc, cfg.did_smc_addr)
+        chain = self._chains.get(key)
+        if chain is None:
             from pila_credential.didv2.rpc import DIDChain
 
-            self._chain = DIDChain(cfg.rpc, cfg.did_smc_addr)
-        return self._chain
+            chain = self._chains[key] = DIDChain(*key)
+        return chain
 
     # ------------------------------------------------------------------ workflows
 
@@ -68,10 +73,12 @@ class DIDGenerator:
         # add_vms is already merged into cfg.extra_vms; passing it on would add it twice
         overrides = {k: v for k, v in overrides.items() if k != "add_vms"}
         overrides.update(did_signer=did_signer, cap_id=cfg.cap_id)
+        extra_vms = list(cfg.extra_vms)  # always handed on: add_vms was dropped from overrides above
         if cfg.enable_p256_vm:
             did_addr = address_from_public_key_hex(key_pair.get_public_key_hex())
             vm = new_p256_multikey_vm(to_did(cfg.method, did_addr), "#key-2", key_pair.p256_public_key)
-            overrides["extra_vms"] = [*cfg.extra_vms, new_spec(vm)]
+            extra_vms.append(new_spec(vm))
+        overrides["extra_vms"] = extra_vms
         res = self.generate_did_tx(did_type, key_pair.get_public_key_hex(), hash_, metadata, **overrides)
         res["secret"] = {"privateKeyHex": key_pair.get_private_key_hex()}
         return res

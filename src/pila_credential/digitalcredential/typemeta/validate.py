@@ -3,11 +3,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from pila_credential.digitalcredential.typemeta.errors import ErrInvalid, ErrViolated
+from pila_credential.digitalcredential.typemeta.errors import ErrClaims, ErrInvalid, ErrViolated
 from pila_credential.digitalcredential.typemeta.format import SD_ALWAYS, SD_NEVER
 from pila_credential.digitalcredential.typemeta.load import Metadata
 from pila_credential.jose.errors import ErrInvalidArgument
 from pila_credential.jose.sdjwt.recreate import Node as _Node
+
+
+MAX_CLAIM_VISITS = 1 << 20  # Go typemeta maxClaimVisits
+
+
+class _OverBudget(Exception):
+    pass
 
 
 @dataclass
@@ -23,9 +30,15 @@ def validate_claims_payload(m: Metadata | None, issued: _Node, opts: ValidateOpt
         raise ErrInvalidArgument("typemeta: ValidateClaims needs the sdjwt Node of the issued payload")
     opts = opts or ValidateOptions()
     root = issued
+    budget = [MAX_CLAIM_VISITS]
     for i, c in enumerate(m.claims):
         try:
-            _check_claim(c, root, opts.all_disclosures)
+            _check_claim(c, root, opts.all_disclosures, budget)
+        except _OverBudget:
+            raise ErrClaims(
+                f"typemeta: checking the payload against the claim metadata needs over {MAX_CLAIM_VISITS} units "
+                "(one per value read, one more per 64 bytes of a key), the SDK's limit"
+            ) from None
         except ValueError as exc:
             raise ErrViolated(f"typemeta: claims[{i}] with path {c.path!r}: {exc}") from exc
 
@@ -64,13 +77,20 @@ def _issued_node(v: Any) -> _Node:
     return n
 
 
-def _check_claim(c, root: _Node, all_disclosures: bool) -> None:
+def _check_claim(c, root: _Node, all_disclosures: bool, budget: list[int]) -> None:
     sel = [root]
     for el in c.path:
         nxt: list[_Node] = []
         for n in sel:
             if n.hidden:
                 continue
+            # Charge what this step reads before reading it, as Go Claim.check does.
+            cost = 1 + len(el) // 64 if isinstance(el, str) else 1
+            if el is None or (not isinstance(el, str) and all_disclosures):
+                cost = len(n.elems or ())
+            budget[0] -= cost
+            if budget[0] < 0:
+                raise _OverBudget
             if isinstance(el, str):
                 if n.fields is None:
                     raise ValueError("a key is selected in a value that is not an object (§5.6.1.2)")

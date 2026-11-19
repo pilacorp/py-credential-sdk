@@ -20,10 +20,10 @@ from urllib.parse import unquote
 
 from cryptography.hazmat.primitives.asymmetric import ec as crypto_ec
 
-from pila_credential.digitalcredential.internal import safehttp, uri
-from pila_credential.digitalcredential.internal.allowlist import Hints, Redirects, check, new as allowlist_new, redirects_any, redirects_to
-from pila_credential.digitalcredential.internal.httpcache import get as httpcache_get
-from pila_credential.digitalcredential.internal.safehttp import (
+from pila_credential.digitalcredential._internal import safehttp, uri
+from pila_credential.digitalcredential._internal.allowlist import Hints, Redirects, check, new as allowlist_new, redirects_any, redirects_to
+from pila_credential.digitalcredential._internal.httpcache import get as httpcache_get
+from pila_credential.digitalcredential._internal.safehttp import (
     Client,
     ErrBlockedAddress,
     ErrBodyTooLarge,

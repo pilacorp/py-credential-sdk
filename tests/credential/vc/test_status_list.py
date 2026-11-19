@@ -67,8 +67,9 @@ def test_msb_first_and_signed_list():
 def test_unsigned_or_foreign_list_is_refused():
     with pytest.raises(ValueError, match="verify proof|proof"):
         _check(1, _list_body([0], sign=False))
-    with pytest.raises(ValueError, match="issuer"):
-        _check(1, _list_body([0], issuer="did:example:other"))
+    # BSL §3.2: the list may come from another issuer; which issuers to trust is the verifier's call.
+    with pytest.raises(ValueError, match="revoked"):
+        _check(0, _list_body([0], issuer="did:example:other"))
 
 
 def test_purpose_mismatch_and_unknown_purpose():
@@ -84,3 +85,26 @@ def test_short_list_and_index_forms():
     for bad in (" 5", "1_0", "٥"):
         with pytest.raises(ValueError, match="statusListIndex"):
             _check(bad, _list_body())
+
+
+def test_enveloped_list_id_does_not_skip_body_proof():
+    body = json.loads(_list_body([], sign=False))
+    body["data"]["id"] = "data:application/vc+jwt,aaa.bbb.ccc"
+    body["data"]["type"] = ["VerifiableCredential", "BitstringStatusListCredential", "EnvelopedVerifiableCredential"]
+    with pytest.raises(ValueError, match="proof"):
+        _check(0, json.dumps(body).encode())
+
+
+def test_status_list_validity_uses_leeway():
+    from datetime import datetime, timedelta, timezone
+
+    future = (datetime.now(timezone.utc) + timedelta(seconds=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    body = json.loads(_list_body([], sign=False))
+    body["data"]["validFrom"] = future
+    JSONMap(body["data"]).add_ecdsa_proof(PROV, f"{ISSUER}#key-1", "assertionMethod", vm_pub=p256_pub(PROV))
+    raw = json.dumps(body).encode()
+    cred = {"issuer": ISSUER, "credentialStatus": {"statusListIndex": "1", "statusListCredential": LIST_URL}}
+    mk = lambda *o: vc.get_options(vc.with_resolver(RESOLVER), vc.with_status_client(Client(fetch=lambda u: raw)), *o)  # noqa: E731
+    with pytest.raises(ValueError, match="not valid yet"):
+        helper.check_revocation(cred, mk())
+    helper.check_revocation(cred, mk(vc.with_leeway(timedelta(seconds=60))))

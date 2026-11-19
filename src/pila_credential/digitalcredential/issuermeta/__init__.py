@@ -16,7 +16,7 @@ from pila_credential.digitalcredential.issuermeta.issuermeta import (
     redirect_to,
     signing_keys,
 )
-from pila_credential.digitalcredential.internal.safehttp import (
+from pila_credential.digitalcredential._internal.safehttp import (
     ErrBodyTooLarge,
     ErrContentTypeNotAccepted,
     ErrRedirectTargetNotAllowed,

@@ -1,4 +1,4 @@
-from pila_credential.digitalcredential.internal import uri
+from pila_credential.digitalcredential._internal import uri
 
 
 def test_uri_check_examples() -> None:

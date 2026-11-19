@@ -366,6 +366,6 @@ def with_now(t: datetime | None) -> VerifyOption:
     def set_(c: VerifyConfig) -> None:
         if t is None:
             raise policy_err("with_now(None); pass the time of the check")
-        c.now = t
+        c.now = t if t.tzinfo is not None else t.replace(tzinfo=timezone.utc)  # naive is UTC, as elsewhere
 
     return VerifyOption("with_now", set_)

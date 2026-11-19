@@ -19,7 +19,7 @@ from pila_credential.jose.sdjwt.path import Path, format_path
 from pila_credential.digitalcredential.claims import NEVER_DISCLOSABLE, TYP_DC_SD_JWT, is_str
 from pila_credential.digitalcredential.credential import Credential, compact_sd_jwt
 from pila_credential.digitalcredential.errors import combine, errors_is
-from pila_credential.digitalcredential.internal import sri, uri
+from pila_credential.digitalcredential._internal import sri, uri
 from pila_credential.digitalcredential.issuerkey import SigningKey
 
 BACKGROUND = object()  # the context.Background() of this port: there is no cancellation

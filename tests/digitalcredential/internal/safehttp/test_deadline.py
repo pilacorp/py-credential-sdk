@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-from pila_credential.digitalcredential.internal import safehttp as sh
+from pila_credential.digitalcredential._internal import safehttp as sh
 
 
 def test_slow_body_ends_within_timeout():

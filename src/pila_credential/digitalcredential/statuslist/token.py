@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from pila_credential.digitalcredential.internal import uri
+from pila_credential.digitalcredential._internal import uri
 from pila_credential.digitalcredential.issuerkey import SigningKey
 from pila_credential.digitalcredential.statuslist.statuslist import List
 from pila_credential.jose import json as jose_json
