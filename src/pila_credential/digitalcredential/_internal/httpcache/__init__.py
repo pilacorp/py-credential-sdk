@@ -69,6 +69,7 @@ def _delta_seconds(s: str) -> int | None:
     """1*DIGIT (ASCII), capped at 2^31; None when invalid."""
     if not s or not all("0" <= c <= "9" for c in s):
         return None
-    if len(s.lstrip("0")) > 10:  # int() of thousands of digits raises ValueError; anything this long is past the cap
+    digits = s.lstrip("0") or "0"
+    if len(digits) > 10:  # int() of thousands of digits raises ValueError; anything this long is past the cap
         return _LIMIT
-    return min(int(s), _LIMIT)
+    return min(int(digits), _LIMIT)

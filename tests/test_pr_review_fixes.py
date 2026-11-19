@@ -68,6 +68,8 @@ def test_with_now_naive_is_utc_and_max_age_leading_zeros():
     with_now(datetime(2025, 1, 1)).set_on(c)
     assert c.now.tzinfo is not None
     assert _delta_seconds("00000000060") == 60
+    assert _delta_seconds("0" * 5000 + "60") == 60  # int() of the raw string would raise
+    assert _delta_seconds("0" * 5000) == 0
 
 
 def test_claim_budget_refuses_quickly():
