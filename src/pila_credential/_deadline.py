@@ -34,11 +34,9 @@ class Deadline:
 
     @staticmethod
     def _shut(sock: socket.socket) -> None:
+        # shutdown only: it wakes a blocked recv or handshake in the owner's thread. Closing here would free the
+        # fd while that thread may still use it, and a socket opened meanwhile could get the same number.
         try:
             sock.shutdown(socket.SHUT_RDWR)
-        except OSError:
-            pass
-        try:
-            sock.close()
         except OSError:
             pass

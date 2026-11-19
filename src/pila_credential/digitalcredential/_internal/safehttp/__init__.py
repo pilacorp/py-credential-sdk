@@ -9,9 +9,9 @@ resolution and on every redirect. Redirects are followed by `get` itself, never 
 
 from __future__ import annotations
 
-import concurrent.futures
 import http.client
 import socket
+import threading
 import ssl
 import time
 from dataclasses import dataclass, field
@@ -295,17 +295,28 @@ def new_client() -> Client:
     return Client()
 
 
-_RESOLVER = concurrent.futures.ThreadPoolExecutor(max_workers=8, thread_name_prefix="safehttp-dns")
-
-
 def _resolve(host: str, port_: int, deadline: float | None) -> list:
-    # getaddrinfo takes no timeout, so the lookup runs in a worker and the caller waits only until the deadline.
-    fut = _RESOLVER.submit(socket.getaddrinfo, host, port_, type=socket.SOCK_STREAM)
+    # getaddrinfo takes no timeout, so it runs in its own daemon thread and the caller waits only until the
+    # deadline. One thread per lookup: a shared pool lets slow lookups for one host starve every other fetch,
+    # and its workers are joined at interpreter exit.
+    box: dict[str, object] = {}
+    done = threading.Event()
+
+    def run() -> None:
+        try:
+            box["addrs"] = socket.getaddrinfo(host, port_, type=socket.SOCK_STREAM)
+        except BaseException as e:  # noqa: BLE001
+            box["err"] = e
+        finally:
+            done.set()
+
+    threading.Thread(target=run, name="safehttp-dns", daemon=True).start()
     left = None if deadline is None else max(deadline - time.monotonic(), 0)
-    try:
-        return fut.result(timeout=left)
-    except concurrent.futures.TimeoutError:
-        raise TimeoutError("deadline exceeded while resolving the host") from None
+    if not done.wait(left):
+        raise TimeoutError("deadline exceeded while resolving the host")
+    if "err" in box:
+        raise box["err"]  # type: ignore[misc]
+    return box["addrs"]  # type: ignore[return-value]
 
 
 def _dial(host: str, port_: int, timeout: float, check, deadline: float | None = None, dl: Deadline | None = None) -> socket.socket:

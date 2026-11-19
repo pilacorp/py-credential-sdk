@@ -146,3 +146,14 @@ def test_dns_lookup_under_deadline(monkeypatch):
     with pytest.raises(sh.FetchError):
         sh.get(sh.Client(), "https://slow-dns.example/", ["application/json"], sh.Limits(timeout_seconds=1))
     assert time.monotonic() - t < 2
+
+
+def test_slow_dns_does_not_starve_other_lookups(monkeypatch):
+    from pila_credential.digitalcredential._internal import safehttp as sh
+
+    real = socket.getaddrinfo
+    monkeypatch.setattr(sh.socket, "getaddrinfo", lambda h, *a, **k: time.sleep(3) if h == "slow.example" else real(h, *a, **k))
+    for _ in range(10):  # more than any shared pool size
+        with pytest.raises(TimeoutError):
+            sh._resolve("slow.example", 443, time.monotonic() + 0.1)
+    assert sh._resolve("127.0.0.1", 80, time.monotonic() + 1)
