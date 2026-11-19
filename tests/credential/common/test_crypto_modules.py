@@ -1,7 +1,7 @@
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from credential.common.crypto.ecdsa_rdfc import verify_ecdsa
-from credential.common.signer.p256 import P256Provider
+from pila_credential.credential.common.crypto.ecdsa_rdfc import verify_ecdsa
+from pila_credential.credential.common.signer.p256 import P256Provider
 
 
 def test_verify_ecdsa_accepts_64_byte_signature():

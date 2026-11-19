@@ -1,4 +1,4 @@
-from credential.common.util.compress import compress, decompress
+from pila_credential.credential.common.util.compress import compress, decompress
 
 
 def test_gzip_roundtrip():

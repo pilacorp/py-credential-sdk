@@ -4,9 +4,9 @@ import json
 import pytest
 from jwtvc_kit import V1, V2, p256_pair, sign_input, signing_input
 
-from credential.common import sdjwt
-from credential.common.verification_method import StaticResolver, new_did_document, new_p256_vm
-from credential.vc.credential import parse_credential, with_resolver
+from pila_credential.credential.common import sdjwt
+from pila_credential.credential.common.verification_method import StaticResolver, new_did_document, new_p256_vm
+from pila_credential.credential.vc.credential import parse_credential, with_resolver
 
 
 def two_parties(a, v):

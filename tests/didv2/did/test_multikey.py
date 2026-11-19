@@ -1,6 +1,6 @@
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from didv2.did.multikey import decode_multibase_key, encode_pub_multibase, ec_pub_from_multikey_bytes
+from pila_credential.didv2.did.multikey import decode_multibase_key, encode_pub_multibase, ec_pub_from_multikey_bytes
 
 
 def test_p256_multikey_roundtrip():

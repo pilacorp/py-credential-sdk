@@ -4,17 +4,17 @@ from datetime import timedelta
 
 import pytest
 
-from digitalcredential.credential import compact_sd_jwt, parse
-from digitalcredential.errors import ErrKeyBindingUnsupported, errors_is
-from digitalcredential.issue import issue
-from digitalcredential.present import KeyBinding, PresentRequest
-from jose import json as jose_json
-from jose.errors import ErrInvalidArgument, ErrMalformed, ErrUnsupportedKey
-from jose.jwk import jwk as jose_jwk
-from jose.jws import errors as jws_errors
-from jose.jws import jws as jose_jws
-from jose.jws import private_key_signer
-from jose.sdjwt import KBVerifyParams, conceal, parse_disclosure, sd_hash, split, verify_kb_jwt
+from pila_credential.digitalcredential.credential import compact_sd_jwt, parse
+from pila_credential.digitalcredential.errors import ErrKeyBindingUnsupported, errors_is
+from pila_credential.digitalcredential.issue import issue
+from pila_credential.digitalcredential.present import KeyBinding, PresentRequest
+from pila_credential.jose import json as jose_json
+from pila_credential.jose.errors import ErrInvalidArgument, ErrMalformed, ErrUnsupportedKey
+from pila_credential.jose.jwk import jwk as jose_jwk
+from pila_credential.jose.jws import errors as jws_errors
+from pila_credential.jose.jws import jws as jose_jws
+from pila_credential.jose.jws import private_key_signer
+from pila_credential.jose.sdjwt import KBVerifyParams, conceal, parse_disclosure, sd_hash, split, verify_kb_jwt
 
 from dc_helpers import TESTDATA, new_key, test_key, test_request, unix
 

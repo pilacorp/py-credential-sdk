@@ -1,6 +1,6 @@
 import pytest
 
-from digitalcredential.internal.httpcache import freshness
+from pila_credential.digitalcredential._internal.httpcache import freshness
 
 H24 = 24 * 3600.0
 

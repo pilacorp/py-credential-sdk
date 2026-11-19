@@ -3,8 +3,8 @@
 import pytest
 from cryptography.hazmat.primitives.asymmetric import ec as cec, ed25519
 
-from jose import ErrUnsupportedKey, encode_segment, decode_segment
-from jose.jwk import ErrBadKey, from_public_key, to_public_key
+from pila_credential.jose import ErrUnsupportedKey, encode_segment, decode_segment
+from pila_credential.jose.jwk import ErrBadKey, from_public_key, to_public_key
 
 
 def p256():

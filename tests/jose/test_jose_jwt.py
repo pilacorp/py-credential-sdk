@@ -5,8 +5,8 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from jose import ErrInvalidArgument, ErrMalformed, JsonNumber
-from jose.jwt import ErrAudience, ErrExpired, ErrNotYetValid, check_aud, check_exp_nbf, date_claim, numeric_date, numeric_date_ns
+from pila_credential.jose import ErrInvalidArgument, ErrMalformed, JsonNumber
+from pila_credential.jose.jwt import ErrAudience, ErrExpired, ErrNotYetValid, check_aud, check_exp_nbf, date_claim, numeric_date, numeric_date_ns
 
 AT = datetime(2023, 11, 14, 22, 13, 20, tzinfo=timezone.utc)
 

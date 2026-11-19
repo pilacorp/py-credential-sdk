@@ -8,7 +8,7 @@ from cryptography.hazmat.primitives.asymmetric.utils import Prehashed, decode_ds
 from cryptography.hazmat.primitives import hashes
 from eth_keys import keys as eth_keys
 
-from jose import (
+from pila_credential.jose import (
     MAX_JSON_DEPTH,
     ErrInvalidArgument,
     ErrMalformed,
@@ -18,8 +18,8 @@ from jose import (
     decode_segment,
     encode_segment,
 )
-from jose.jwk import from_public_key as jwk_from_public_key, to_public_key as jwk_to_public_key
-from jose.jws import (
+from pila_credential.jose.jwk import from_public_key as jwk_from_public_key, to_public_key as jwk_to_public_key
+from pila_credential.jose.jws import (
     AlgES256,
     AlgES256K,
     ErrAlgKeyMismatch,

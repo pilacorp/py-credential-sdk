@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from cryptography.hazmat.primitives.asymmetric import ec as cec
 
-from jose import (
+from pila_credential.jose import (
     ErrInvalidArgument,
     ErrMalformed,
     ErrUnsupportedAlg,
@@ -18,9 +18,9 @@ from jose import (
     decode_segment,
     encode_json,
 )
-from jose.jwk import to_public_key as jwk_to_public_key
-from jose.jws import AlgES256K, ErrAlgNotAllowed, Header, private_key_signer, sign
-from jose.sdjwt import (
+from pila_credential.jose.jwk import to_public_key as jwk_to_public_key
+from pila_credential.jose.jws import AlgES256K, ErrAlgNotAllowed, Header, private_key_signer, sign
+from pila_credential.jose.sdjwt import (
     ErrKBAudience,
     ErrKBInvalid,
     ErrKBNonce,
@@ -172,7 +172,7 @@ def test_kb_jwt_error_wraps_cause_like_go():
     assert isinstance(e.value, ErrMalformed)
     kb = new_kb_jwt(CTX, s, s.pub, KBClaims("a", "n", datetime.now(UTC), SD_HASH))
     other = MemSigner(cec.SECP256R1())
-    from jose.jws import ErrBadSignature
+    from pila_credential.jose.jws import ErrBadSignature
 
     with pytest.raises(ErrKBInvalid) as e:
         verify_kb_jwt(kb, other.pub, p)
@@ -183,7 +183,7 @@ def test_kb_jwt_error_wraps_cause_like_go():
 def test_kb_jwt_rejects_crit_and_b64_header():
     s = MemSigner(cec.SECP256R1())
     p = KBVerifyParams(audience="a", nonce="n", sd_hash=SD_HASH, now=unix(1748537244), max_age_seconds=60)
-    from jose import encode_segment
+    from pila_credential.jose import encode_segment
 
     for h in ('{"alg":"ES256","typ":"kb+jwt","crit":["exp"]}', '{"alg":"ES256","typ":"kb+jwt","b64":false}'):
         inp = encode_segment(h.encode()) + "." + encode_segment(b"{}")
@@ -214,7 +214,7 @@ def test_new_kb_jwt_rejects_bad_arguments():
     with pytest.raises(ErrInvalidArgument):  # Extra that cannot be encoded
         new_kb_jwt(CTX, s, s.pub, KBClaims("a", "n", unix(1), SD_HASH, {"x": object()}))
     # a signer that does not hold the holder key fails the self check
-    from jose.jws import ErrSelfCheck
+    from pila_credential.jose.jws import ErrSelfCheck
 
     with pytest.raises(ErrSelfCheck):
         new_kb_jwt(CTX, s, MemSigner(cec.SECP256R1()).pub, ok)

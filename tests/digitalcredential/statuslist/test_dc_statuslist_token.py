@@ -4,11 +4,11 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from digitalcredential import statuslist as sl
-from digitalcredential.issuerkey import SigningKey
-from jose import json as jj
-from jose import jws
-from jose.errors import ErrInvalidArgument
+from pila_credential.digitalcredential import statuslist as sl
+from pila_credential.digitalcredential.issuerkey import SigningKey
+from pila_credential.jose import json as jj
+from pila_credential.jose import jws
+from pila_credential.jose.errors import ErrInvalidArgument
 
 
 def new_signing_key(kid=""):

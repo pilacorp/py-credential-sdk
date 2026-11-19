@@ -13,12 +13,12 @@ from vp_helpers import (
     p256_vm,
     sign_compact,
 )
-from credential.common.dto.proof import Proof
-from credential.common.verification_method import DIDDocument
-from credential.vc import credential as vc
-from credential.vc.json_credential import JSONCredential
-from credential.vc.jose_credential import JOSECredential
-from credential import vp
+from pila_credential.credential.common.dto.proof import Proof
+from pila_credential.credential.common.verification_method import DIDDocument
+from pila_credential.credential.vc import credential as vc
+from pila_credential.credential.vc.json_credential import JSONCredential
+from pila_credential.credential.vc.jose_credential import JOSECredential
+from pila_credential.credential import vp
 import hashlib
 
 

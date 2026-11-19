@@ -27,16 +27,16 @@ from vp_helpers import (
     sign_via_jsonmap,
     vp_doc,
 )
-from credential.common.dto.proof import Proof, StringOrStrings
-from credential.common.jsonmap import JSONMap
-from credential.common.verification_method import (
+from pila_credential.credential.common.dto.proof import Proof, StringOrStrings
+from pila_credential.credential.common.jsonmap import JSONMap
+from pila_credential.credential.common.verification_method import (
     encode_multibase_key,
     new_p256_multikey_vm,
     new_rsa_vm,
 )
-from credential.vc import credential as vc
-from credential.vc.json_credential import JSONCredential
-from credential import vp
+from pila_credential.credential.vc import credential as vc
+from pila_credential.credential.vc.json_credential import JSONCredential
+from pila_credential.credential import vp
 
 
 def _p256_setup(holder):

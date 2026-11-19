@@ -1,4 +1,4 @@
-from didv2.did.verification_method_ops import (
+from pila_credential.didv2.did.verification_method_ops import (
     add_verification_method,
     add_verification_method_purposes,
     find_verification_method,
@@ -6,7 +6,7 @@ from didv2.did.verification_method_ops import (
     revoke_verification_method,
     rotate_verification_method,
 )
-from credential.common.verification_method import resolve_signing_vm
+from pila_credential.credential.common.verification_method import resolve_signing_vm
 
 DID = "did:nda:0x19e7e376e7c213b7e7e7e46cc70a5dd086daff2a"
 PUB1 = "0x03354b9ae48c3cecaf6636ba88e321847edbf450a2777a012240d6d51705de73d7"

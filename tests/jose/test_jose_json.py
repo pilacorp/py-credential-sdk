@@ -2,7 +2,7 @@
 
 import pytest
 
-from jose import (
+from pila_credential.jose import (
     MAX_JSON_DEPTH,
     ErrInvalidArgument,
     ErrMalformed,

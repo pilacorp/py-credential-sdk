@@ -6,8 +6,8 @@ import pytest
 from eth_abi import encode
 from eth_utils import to_checksum_address
 
-from credential.vccontract.model import VerifyByTxRequest, VerifyRequest
-from credential.vccontract.registry import (
+from pila_credential.credential.vccontract.model import VerifyByTxRequest, VerifyRequest
+from pila_credential.credential.vccontract.registry import (
     ERR_NO_CONTRACT,
     ERR_ROOT_NOT_ANCHORED,
     ERR_TX_NOT_FOUND,
@@ -18,7 +18,7 @@ from credential.vccontract.registry import (
     fold_proof,
     hash_pair,
 )
-from didv2.hexutil import with_0x
+from pila_credential.didv2.hexutil import with_0x
 
 REGISTRY = "0x1111111111111111111111111111111111111111"
 LEGACY = "0x2222222222222222222222222222222222222222"

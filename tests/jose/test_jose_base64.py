@@ -2,7 +2,7 @@
 
 import pytest
 
-from jose import ErrMalformed, decode_segment, encode_segment
+from pila_credential.jose import ErrMalformed, decode_segment, encode_segment
 
 
 @pytest.mark.parametrize("b", [b"", b"\x00", b"\xff\xfe", "héllo <&>".encode()])

@@ -12,3 +12,4 @@ venv/
 .nda-harness/skill-selection/
 .DS_Store
 interop/
+.serena/

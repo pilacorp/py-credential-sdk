@@ -11,21 +11,21 @@ from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
 from eth_keys import keys
 
-from credential.common.dto.proof import Proof
-from credential.common.jsonmap import JSONMap
-from credential.common.jwt import JWTSigner, JWTVerifier
-from credential.common.jwt.jwtutil import b64url_encode, json_dumps
-from credential.common.signer.p256 import P256Provider
-from credential.common.verification_method import (
+from pila_credential.credential.common.dto.proof import Proof
+from pila_credential.credential.common.jsonmap import JSONMap
+from pila_credential.credential.common.jwt import JWTSigner, JWTVerifier
+from pila_credential.credential.common.jwt.jwtutil import b64url_encode, json_dumps
+from pila_credential.credential.common.signer.p256 import P256Provider
+from pila_credential.credential.common.verification_method import (
     StaticResolver,
     new_did_document,
     new_p256_multikey_vm,
     new_p256_vm,
     new_secp256k1_vm,
 )
-from credential.vc import credential as vc
-from credential.vp.presentation import PresentationContents
-from didv2.signer import DefaultProvider
+from pila_credential.credential.vc import credential as vc
+from pila_credential.credential.vp.presentation import PresentationContents
+from pila_credential.didv2.signer import DefaultProvider
 
 TEST_DID = "did:nda:testnet:0x8b3b1dee8e00cb95f8b2a1d1a9a7cb8fe7d490ce"
 TEST_SECP_PRIV_HEX = "e5c9a597b20e13627a3850d38439b61ec9ee7aefd77c7cb6c01dc3866e1db19a"
@@ -152,13 +152,13 @@ def vp_doc(holder: str) -> bytes:
 
 
 def jwt_payload(token: str) -> dict:
-    from credential.common.jwt.jwtutil import b64url_decode
+    from pila_credential.credential.common.jwt.jwtutil import b64url_decode
 
     return json.loads(b64url_decode(token.split(".")[1]))
 
 
 def jwt_header(token: str) -> dict:
-    from credential.common.jwt.jwtutil import b64url_decode
+    from pila_credential.credential.common.jwt.jwtutil import b64url_decode
 
     return json.loads(b64url_decode(token.split(".")[0]))
 
@@ -176,7 +176,7 @@ def err_chain_has(exc: BaseException, cls: type) -> bool:
 
 def sign_via_jsonmap(pres, signer, vm_url: str, use_jws: bool):
     """Sign a copy through jsonmap, bypassing vp's VM selection (JWS2020/RSA, pinned rdfc)."""
-    from credential.vp.json_presentation import JSONPresentation
+    from pila_credential.credential.vp.json_presentation import JSONPresentation
 
     m = JSONMap(json.loads(pres.get_contents()))
     if use_jws:
@@ -187,6 +187,6 @@ def sign_via_jsonmap(pres, signer, vm_url: str, use_jws: bool):
 
 
 def proof_from_json(raw) -> Proof:
-    from credential.common.jsonmap import parse_raw_to_proof
+    from pila_credential.credential.common.jsonmap import parse_raw_to_proof
 
     return parse_raw_to_proof(raw)

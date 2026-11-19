@@ -1,0 +1,129 @@
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from hashlib import sha256
+from typing import Any
+
+from cryptography.hazmat.primitives.asymmetric import ec
+
+from pila_credential.credential.common.crypto.ecdsa_rdfc import ecdsa_verify_signature, verify_ecdsa
+from pila_credential.credential.common.dto.proof import Proof, StringOrStrings
+from pila_credential.credential.common.verification_method.verification_method import DIDDocument
+
+from pila_credential.credential.common.jsonmap._constants import (
+    DATA_INTEGRITY_PROOF,
+    ECDSA_RDFC_2019,
+    MULTIBASE_BASE58_BTC_PREFIX,
+)
+from pila_credential.credential.common.jsonmap._context import context_snapshot, ensure_data_integrity_context
+from pila_credential.credential.common.jsonmap._ecdsa_common import (
+    ecdsa_hash_data,
+    legacy_hex_canonicalize,
+)
+from pila_credential.credential.common.jsonmap._multibase import decode_multibase_key, encode_multibase_key
+from pila_credential.credential.common.jsonmap._options import ProofOptions, SignerProvider, domain_value, new_proof_options
+from pila_credential.credential.common.jsonmap._proof_helpers import append_proof, strict_purpose_check
+from pila_credential.credential.common.jsonmap._vm import find_vm_entry, pub_from_entry
+
+
+def add_ecdsa_proof(
+    m: dict[str, Any],
+    signer: SignerProvider,
+    verification_method: str,
+    proof_purpose: str,
+    *,
+    options: ProofOptions | None = None,
+) -> None:
+    if signer is None:
+        raise ValueError("jsonmap: signer provider cannot be nil")
+    if not verification_method:
+        raise ValueError("jsonmap: verification method is required")
+    if not proof_purpose:
+        raise ValueError("jsonmap: proof purpose is required")
+
+    restore = context_snapshot(m)
+    try:
+        ensure_data_integrity_context(m)
+        opts = options or new_proof_options()
+        domain = domain_value(opts.domain)
+        proof = Proof(
+            type=DATA_INTEGRITY_PROOF,
+            created=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            verification_method=verification_method,
+            proof_purpose=proof_purpose,
+            cryptosuite=ECDSA_RDFC_2019,
+            challenge=opts.challenge,
+            domain=domain if domain is not None else StringOrStrings(),
+        )
+        hash_data = ecdsa_hash_data(m, proof)
+        sign_digest = sha256(hash_data).digest()
+        signature = signer.sign(sign_digest)
+        if len(signature) != 64:
+            raise ValueError(
+                "jsonmap: ecdsa-rdfc-2019 expects a 64-byte P-256 signature (r||s) but the signer returned "
+                f"{len(signature)} bytes; the signer does not match the verification method — "
+                "pin the right VM with WithVerificationMethodKey"
+            )
+        if opts.vm_pub is not None:
+            if not verify_ecdsa(opts.vm_pub, sign_digest, signature):
+                raise ValueError(
+                    f"jsonmap: the signature does not verify against verification method {verification_method!r}; "
+                    "the signer does not hold that key"
+                )
+        proof.proof_value = encode_multibase_key(signature)
+        append_proof(m, proof)
+    except Exception:
+        restore()
+        raise
+
+
+def verify_ecdsa_rdfc(m: dict[str, Any], pub: Any, proof: Proof) -> bool:
+    """A "z" proofValue selects the spec-conformant path (P-256 only); anything else the legacy hex path
+    (secp256k1/P-256 proofs issued by SDK <= v1.7.0, which also carry cryptosuite ecdsa-rdfc-2019)."""
+    pv = proof.proof_value
+    if pv.startswith(MULTIBASE_BASE58_BTC_PREFIX):
+        if not (isinstance(pub, ec.EllipticCurvePublicKey) and isinstance(pub.curve, ec.SECP256R1)):
+            name = pub.curve.name if isinstance(pub, ec.EllipticCurvePublicKey) else "secp256k1"
+            raise ValueError(
+                f"ecdsa-rdfc-2019: verification method {proof.verification_method!r} uses curve "
+                f"{name!r}, but this SDK supports P-256 only"
+            )
+        return _verify_ecdsa_spec_conformant(m, pub, proof)
+
+    # Legacy hex proofs sign the body only, so challenge and domain are NOT covered; verifiers
+    # must prevent replay themselves.
+    try:
+        doc = legacy_hex_canonicalize(m)
+    except ValueError as exc:
+        raise ValueError(f"failed to canonicalize JSONMap: {exc}") from exc
+    return ecdsa_verify_signature(pub, pv, doc)
+
+
+_MAX_SIG_B58 = 88  # base58 of 64 bytes; plus the multibase prefix "z"
+
+
+def _verify_ecdsa_spec_conformant(m: dict[str, Any], pub: ec.EllipticCurvePublicKey, proof: Proof) -> bool:
+    if len(proof.proof_value) > _MAX_SIG_B58 + 1:
+        # base58 decoding is quadratic: refuse before spending CPU on a signature that cannot be 64 bytes
+        raise ValueError("ecdsa-rdfc-2019 proofValue is longer than a 64-byte signature can be")
+    try:
+        signature = decode_multibase_key(proof.proof_value)
+    except ValueError as exc:
+        raise ValueError(f"failed to decode multibase proofValue: {exc}") from exc
+    hash_data = ecdsa_hash_data(m, proof)
+    digest = sha256(hash_data).digest()
+    if len(signature) != 64:
+        raise ValueError(f"ecdsa-rdfc-2019 proofValue decodes to {len(signature)} bytes, want 64 (r||s)")
+    return verify_ecdsa(pub, digest, signature)
+
+
+def verify_data_integrity_proof(m: dict[str, Any], doc: DIDDocument, proof: Proof) -> bool:
+    try:
+        vm = find_vm_entry(doc, proof.verification_method)
+    except ValueError as exc:
+        raise ValueError(f"failed to resolve verification method: {exc}") from exc
+    pub = pub_from_entry(vm)
+    if not verify_ecdsa_rdfc(m, pub, proof):
+        return False
+    strict_purpose_check(doc, vm, proof.proof_purpose, proof.created)
+    return True

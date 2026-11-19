@@ -1,5 +1,5 @@
-from credential.vcanchor import BatchInput, MemoryStore, Manager, build_batch, verify_receipt_local
-from credential.vcanchor.merkle import merkle_proof, proof_len
+from pila_credential.credential.vcanchor import BatchInput, MemoryStore, Manager, build_batch, verify_receipt_local
+from pila_credential.credential.vcanchor.merkle import merkle_proof, proof_len
 
 
 def test_build_batch_and_receipt() -> None:

@@ -1,5 +1,5 @@
-from credential.common.verification_method.key_material import secp256k1_pub_from_hex
-from didv2.signer import DefaultProvider
+from pila_credential.credential.common.verification_method.key_material import secp256k1_pub_from_hex
+from pila_credential.didv2.signer import DefaultProvider
 
 
 def test_secp256k1_pub_from_compressed_hex():

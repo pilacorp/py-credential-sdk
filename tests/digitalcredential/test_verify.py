@@ -6,12 +6,12 @@ from datetime import timedelta
 import pytest
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from digitalcredential import errors as E
-from digitalcredential.errors import DigitalCredentialError, ErrKeyBindingUnsupported, ErrPolicy, code_of, errors_is
-from digitalcredential.issue import issue
-from digitalcredential.issuerkey import ErrIssuerNotSupported, ErrNoUsableKey, PublicKey
-from digitalcredential.present import KeyBinding, PresentRequest
-from digitalcredential.verify_options import (
+from pila_credential.digitalcredential import errors as E
+from pila_credential.digitalcredential.errors import DigitalCredentialError, ErrKeyBindingUnsupported, ErrPolicy, code_of, errors_is
+from pila_credential.digitalcredential.issue import issue
+from pila_credential.digitalcredential.issuerkey import ErrIssuerNotSupported, ErrNoUsableKey, PublicKey
+from pila_credential.digitalcredential.present import KeyBinding, PresentRequest
+from pila_credential.digitalcredential.verify_options import (
     KeyBindingMode,
     with_accepted_issuers,
     with_accepted_status,
@@ -25,12 +25,12 @@ from digitalcredential.verify_options import (
     with_status,
     without_status_check,
 )
-from jose import base64 as jose_b64
-from jose import json as jose_json
-from jose.errors import ErrInvalidArgument, ErrUnsupportedAlg, ErrUnsupportedKey
-from jose.jws import errors as jws_errors
-from jose.jws import private_key_signer
-from jose.sdjwt import split
+from pila_credential.jose import base64 as jose_b64
+from pila_credential.jose import json as jose_json
+from pila_credential.jose.errors import ErrInvalidArgument, ErrUnsupportedAlg, ErrUnsupportedKey
+from pila_credential.jose.jws import errors as jws_errors
+from pila_credential.jose.jws import private_key_signer
+from pila_credential.jose.sdjwt import split
 
 from dc_helpers import (
     DRAFT19_FIG8,
@@ -359,7 +359,7 @@ def test_verify_policy():
     with pytest.raises(ErrPolicy):
         s.verify(own.no_status)
 
-    from digitalcredential.credential import parse
+    from pila_credential.digitalcredential.credential import parse
 
     c = parse(issued)
     with pytest.raises(ErrPolicy):
@@ -443,7 +443,7 @@ def test_verify_status_idx(idx, klass, want, skip):
     s.extra = [without_status_check()] if skip else [with_status(rec)]
     if klass == "refused" or (klass == "past_int" and not skip):
         oob = klass == "past_int"
-        from digitalcredential.statuslist.errors import ErrIndexOutOfBounds
+        from pila_credential.digitalcredential.statuslist.errors import ErrIndexOutOfBounds
 
         with pytest.raises(DigitalCredentialError) as ei:
             s.verify(compact)
@@ -466,7 +466,7 @@ def test_verify_draft19_issuer_metadata():
     # TC-19: draft 19 §2.5 and §4, Figure 8 verifies through an issuermeta resolver, its key found in
     # the jwks of Figure 14 published for the Figure 8 iss. (The TLS redirect-downgrade half of the Go
     # test is covered by the issuermeta tests; here the metadata is preloaded.)
-    from digitalcredential.issuermeta.issuermeta import PreloadedResolver
+    from pila_credential.digitalcredential.issuermeta.issuermeta import PreloadedResolver
 
     meta = (
         b'{"issuer":"https://example.com/issuer","jwks":{"keys":['

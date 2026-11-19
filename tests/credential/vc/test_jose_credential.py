@@ -9,13 +9,13 @@ from jwtvc_kit import (
     sign_outside, signing_input, token,
 )
 
-from credential.common.dto.proof import Proof
-from credential.common.verification_method import StaticResolver, new_did_document
-from credential.vc.credential import (
+from pila_credential.credential.common.dto.proof import Proof
+from pila_credential.credential.common.verification_method import StaticResolver, new_did_document
+from pila_credential.credential.vc.credential import (
     parse_credential, with_check_expiration, with_resolver, with_sd_selective_paths,
     with_verification_method_key, with_verify_proof,
 )
-from credential.vc.jose_credential import JOSECredential
+from pila_credential.credential.vc.jose_credential import JOSECredential
 
 
 def _new(contents, resolver, *extra):

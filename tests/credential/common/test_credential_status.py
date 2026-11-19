@@ -6,14 +6,18 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
 
-from credential.common.credential_status import Client, fetch_and_check_revocation, is_revoked
-from credential.common.credential_status.credential_status import DEFAULT_TIMEOUT, MAX_DECODED_BYTES
-from credential.common.credential_status.model import StatusListCredentialSubject
-from credential.common.util.compress import compress_to_base64url
+from pila_credential.credential.common.credential_status import Client, fetch_and_check_revocation, is_revoked
+from pila_credential.credential.common.credential_status.credential_status import DEFAULT_TIMEOUT, MAX_DECODED_BYTES
+from pila_credential.credential.common.credential_status.model import StatusListCredentialSubject
+from pila_credential.credential.common.util.compress import compress_to_base64url
+
+
+def _pad(raw: bytes) -> bytes:
+    return raw.ljust(16384, b"\x00")  # §2.2: at least 16 KB
 
 
 def _subject(raw: bytes, purpose="revocation") -> StatusListCredentialSubject:
-    return StatusListCredentialSubject(encoded_list=compress_to_base64url(raw), status_purpose=purpose)
+    return StatusListCredentialSubject(encoded_list="u" + compress_to_base64url(_pad(raw)), status_purpose=purpose)
 
 
 def _body(raw: bytes, purpose="revocation") -> bytes:
@@ -21,7 +25,7 @@ def _body(raw: bytes, purpose="revocation") -> bytes:
         {
             "data": {
                 "credentialSubject": {
-                    "encodedList": compress_to_base64url(raw),
+                    "encodedList": "u" + compress_to_base64url(_pad(raw)),
                     "statusPurpose": purpose,
                     "id": "did:example:status/0#list",
                     "type": "BitstringStatusList",
@@ -38,30 +42,33 @@ def _body(raw: bytes, purpose="revocation") -> bytes:
 
 
 def test_is_revoked():
-    # 0x01 -> [1,0,0,0,0,0,0,0] (LSB-first)
-    s = _subject(bytes([0x01]))
+    # 0x80 -> [1,0,0,0,0,0,0,0]: index 0 is the left-most bit
+    s = _subject(bytes([0x80]))
     assert is_revoked(0, s) is True
     assert is_revoked(1, s) is False
+    assert is_revoked(7, _subject(bytes([0x01]))) is True
 
 
-def test_is_revoked_non_revocation_purpose():
-    assert is_revoked(0, _subject(bytes([0x01]), "suspension")) is False
+def test_is_revoked_purpose_mismatch_raises():
+    with pytest.raises(ValueError, match="statusPurpose"):
+        is_revoked(0, _subject(bytes([0x80]), "suspension"))
+    assert is_revoked(0, _subject(bytes([0x80]), "suspension"), "suspension") is True
 
 
 def test_is_revoked_bit_order_and_range():
-    s = _subject(bytes([0b00000000, 0b10000000]))
+    s = _subject(bytes([0b00000000, 0b00000001]))
     assert is_revoked(15, s) is True and is_revoked(14, s) is False
-    for pos in (-1, 16, 10**9):
+    for pos in (-1, 16384 * 8, 10**9):
         with pytest.raises(ValueError, match="out of range"):
             is_revoked(pos, s)
 
 
 def test_is_revoked_bad_encodings():
-    for enc in ("", "!!!", "AAAA", compress_to_base64url(b"\x01") + "="):
+    for enc in ("", "!!!", "AAAA", "u" + compress_to_base64url(_pad(b"\x01")) + "="):
         with pytest.raises(ValueError):
             is_revoked(0, StatusListCredentialSubject(encoded_list=enc, status_purpose="revocation"))
     # truncated gzip
-    good = compress_to_base64url(b"\x01" * 10)
+    good = "u" + compress_to_base64url(_pad(b"\x01" * 10))
     with pytest.raises(ValueError):
         is_revoked(0, StatusListCredentialSubject(encoded_list=good[:-6], status_purpose="revocation"))
 
@@ -69,22 +76,28 @@ def test_is_revoked_bad_encodings():
 def test_gzip_bomb_is_capped():
     import base64
 
-    bomb = base64.urlsafe_b64encode(gzip.compress(b"\x00" * (MAX_DECODED_BYTES + 1), 1)).decode().rstrip("=")
+    bomb = "u" + base64.urlsafe_b64encode(gzip.compress(b"\x00" * (MAX_DECODED_BYTES + 1), 1)).decode().rstrip("=")
     with pytest.raises(ValueError, match="too large"):
         is_revoked(0, StatusListCredentialSubject(encoded_list=bomb, status_purpose="revocation"))
 
 
 def test_fetch_and_check_revocation_injected():
-    c = Client(fetch=lambda url: _body(bytes([0x01])))
-    assert fetch_and_check_revocation("https://status.example/1", 0, c) is True
-    assert fetch_and_check_revocation("https://status.example/1", 1, c) is False
+    c = Client(fetch=lambda url: _body(bytes([0x80])))
+    ok = lambda resp: None  # noqa: E731
+    assert fetch_and_check_revocation("https://status.example/1", 0, c, verify=ok) is True
+    assert fetch_and_check_revocation("https://status.example/1", 1, c, verify=ok) is False
+    def refuse(resp):
+        raise ValueError("bad proof")
+    with pytest.raises(ValueError, match="bad proof"):
+        fetch_and_check_revocation("https://status.example/1", 0, c, verify=refuse)
 
 
-def test_fetch_missing_data_is_empty_credential_not_revoked():
-    # Go decodes into {"data": ...}: a bare credential has no data -> empty subject -> not revoked
-    bare = json.loads(_body(bytes([0x01])))["data"]
+def test_fetch_missing_data_is_an_error():
+    # a bare credential has no "data" -> empty subject -> its purpose does not match
+    bare = json.loads(_body(bytes([0x80])))["data"]
     c = Client(fetch=lambda url: json.dumps(bare).encode())
-    assert fetch_and_check_revocation("https://status.example/1", 0, c) is False
+    with pytest.raises(ValueError):
+        fetch_and_check_revocation("https://status.example/1", 0, c, verify=lambda r: None)
 
 
 def test_fetch_rejects_empty_url_and_bad_json():
@@ -103,7 +116,7 @@ def test_default_http_client_against_local_server():
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
-                self.wfile.write(_body(bytes([0x01])))
+                self.wfile.write(_body(bytes([0x80])))
             else:
                 self.send_response(500)
                 self.end_headers()
@@ -115,9 +128,10 @@ def test_default_http_client_against_local_server():
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     try:
         base = f"http://127.0.0.1:{srv.server_port}"
-        assert fetch_and_check_revocation(base + "/ok", 0) is True
+        ok = lambda resp: None  # noqa: E731
+        assert fetch_and_check_revocation(base + "/ok", 0, verify=ok) is True
         with pytest.raises(ValueError):
-            fetch_and_check_revocation(base + "/bad", 0)
+            fetch_and_check_revocation(base + "/bad", 0, verify=ok)
     finally:
         srv.shutdown()
 

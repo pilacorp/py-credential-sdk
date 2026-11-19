@@ -29,11 +29,11 @@ from vp_helpers import (
     test_resolver,
     verify_by_hand,
 )
-from credential.common.dto.proof import Proof
-from credential.common.jwt.jwtutil import b64url_encode, json_dumps
-from credential.vc import credential as vc
-from credential.vc.jose_credential import JOSECredential
-from credential import vp
+from pila_credential.credential.common.dto.proof import Proof
+from pila_credential.credential.common.jwt.jwtutil import b64url_encode, json_dumps
+from pila_credential.credential.vc import credential as vc
+from pila_credential.credential.vc.jose_credential import JOSECredential
+from pila_credential.credential import vp
 
 
 def jwt_vp_contents():

@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 from cryptography.hazmat.primitives.asymmetric import ec
 
-from credential.common.dto.proof import Proof, StringOrStrings
-from credential.common.jsonmap import (
+from pila_credential.credential.common.dto.proof import Proof, StringOrStrings
+from pila_credential.credential.common.jsonmap import (
     JSONMap,
     add_ecdsa_proof,
     add_ecdsa_rdfc_proof,
@@ -22,18 +22,18 @@ from credential.common.jsonmap import (
     strict_purpose_check,
     verify_ecdsa_rdfc,
 )
-from credential.common.jsonmap._constants import (
+from pila_credential.credential.common.jsonmap._constants import (
     DATA_INTEGRITY_PROOF,
     DATA_INTEGRITY_V2_CONTEXT,
     ECDSA_RDFC_2019,
 )
-from credential.common.jsonmap._ecdsa_common import document_digest
-from credential.common.jsonmap._multibase import decode_multibase_key, encode_multibase_key
-from credential.common.jsonmap._secp256k1 import jose_secp256k1_signature
-from credential.common.processor import canonicalize_document
-from credential.common.signer.p256 import P256Provider
-from credential.common.verification_method.revocation import REASON_KEY_COMPROMISE, REASON_SUPERSEDED
-from credential.common.verification_method.verification_method import DIDDocument, VerificationMethodEntry
+from pila_credential.credential.common.jsonmap._ecdsa_common import document_digest
+from pila_credential.credential.common.jsonmap._multibase import decode_multibase_key, encode_multibase_key
+from pila_credential.credential.common.jsonmap._secp256k1 import jose_secp256k1_signature
+from pila_credential.credential.common.processor import canonicalize_document
+from pila_credential.credential.common.signer.p256 import P256Provider
+from pila_credential.credential.common.verification_method.revocation import REASON_KEY_COMPROMISE, REASON_SUPERSEDED
+from pila_credential.credential.common.verification_method.verification_method import DIDDocument, VerificationMethodEntry
 from eth_keys.constants import SECPK1_N
 
 TEST_PRIV_HEX = "4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318"

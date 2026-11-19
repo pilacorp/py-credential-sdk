@@ -11,13 +11,13 @@ from cryptography.hazmat.primitives.asymmetric import ec
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "_helpers"))
 from dcsub_http import Reply, Server, redirect, routed_client  # noqa: E402
 
-from digitalcredential import statuslist as sl  # noqa: E402
-from digitalcredential.internal.safehttp import StatusError, as_, is_  # noqa: E402
-from digitalcredential.issuerkey import PublicKey, SigningKey  # noqa: E402
-from digitalcredential.statuslist import checker as ck  # noqa: E402
-from jose import json as jj  # noqa: E402
-from jose import jws  # noqa: E402
-from jose.errors import ErrInvalidArgument, ErrMalformed, ErrUnsupportedAlg, ErrUnsupportedKey  # noqa: E402
+from pila_credential.digitalcredential import statuslist as sl  # noqa: E402
+from pila_credential.digitalcredential._internal.safehttp import StatusError, as_, is_  # noqa: E402
+from pila_credential.digitalcredential.issuerkey import PublicKey, SigningKey  # noqa: E402
+from pila_credential.digitalcredential.statuslist import checker as ck  # noqa: E402
+from pila_credential.jose import json as jj  # noqa: E402
+from pila_credential.jose import jws  # noqa: E402
+from pila_credential.jose.errors import ErrInvalidArgument, ErrMalformed, ErrUnsupportedAlg, ErrUnsupportedKey  # noqa: E402
 
 CTX = object()
 NOW = datetime.fromtimestamp(1686920170 + 3600, tz=timezone.utc)  # inside the validity of the §5.1 example token
@@ -252,7 +252,7 @@ def test_refetches_grown_list(lserver):
 
 
 def test_cache_budget():
-    from digitalcredential.statuslist.cache import CacheKey, ListCache
+    from pila_credential.digitalcredential.statuslist.cache import CacheKey, ListCache
 
     now = [NOW]
     cache = ListCache(lambda: now[0])
@@ -271,7 +271,7 @@ def test_cache_budget():
 
 
 def test_keeps_newer_list():
-    from digitalcredential.statuslist.cache import CacheKey, ListCache
+    from pila_credential.digitalcredential.statuslist.cache import CacheKey, ListCache
 
     cache = ListCache(lambda: NOW)
     key = CacheKey("https://a.example", "https://example.com/statuslists/1")

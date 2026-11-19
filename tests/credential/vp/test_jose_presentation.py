@@ -21,12 +21,12 @@ from vp_helpers import (
     p256_vm,
     secp_pub_hex,
 )
-from credential.common.jwt.jwtutil import b64url_encode, json_dumps
-from credential.vc import credential as vc
-from credential.vc.json_credential import JSONCredential
-from credential.vc.jwt_credential import JWTCredential
-from credential.vc.jose_credential import JOSECredential
-from credential import vp
+from pila_credential.credential.common.jwt.jwtutil import b64url_encode, json_dumps
+from pila_credential.credential.vc import credential as vc
+from pila_credential.credential.vc.json_credential import JSONCredential
+from pila_credential.credential.vc.jwt_credential import JWTCredential
+from pila_credential.credential.vc.jose_credential import JOSECredential
+from pila_credential.credential import vp
 
 SECP = "57600b3f2b7e1054094e14cd85c72a40dc74c4ee062bb381cea604b55ce56aec"
 

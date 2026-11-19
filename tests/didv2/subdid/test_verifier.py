@@ -1,5 +1,5 @@
-from didv2.subdid.proof import ProofResponse
-from didv2.subdid.verifier import Chain, Verifier, VerifyRequest
+from pila_credential.didv2.subdid.proof import ProofResponse
+from pila_credential.didv2.subdid.verifier import Chain, Verifier, VerifyRequest
 
 
 def test_verifier_rejects_mismatched_proof_did():

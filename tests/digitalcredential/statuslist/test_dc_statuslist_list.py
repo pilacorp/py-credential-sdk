@@ -7,8 +7,8 @@ import zlib
 
 import pytest
 
-from digitalcredential import statuslist as sl
-from jose.errors import ErrInvalidArgument, ErrMalformed
+from pila_credential.digitalcredential import statuslist as sl
+from pila_credential.jose.errors import ErrInvalidArgument, ErrMalformed
 
 HERE = pathlib.Path(__file__).parent
 

@@ -1,6 +1,6 @@
 import hashlib
 
-from digitalcredential.internal import sri
+from pila_credential.digitalcredential._internal import sri
 
 
 def test_sri_check_figure30_sha256() -> None:

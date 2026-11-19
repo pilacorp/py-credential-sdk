@@ -1,7 +1,7 @@
 from eth_keys import keys
 
-from didcomm import decrypt_jwe, encrypt, get_from_keys
-from didv2.hexutil import hex_to_bytes
+from pila_credential.didcomm import decrypt_jwe, encrypt, get_from_keys
+from pila_credential.didv2.hexutil import hex_to_bytes
 
 A = "11" * 32
 B = "22" * 32

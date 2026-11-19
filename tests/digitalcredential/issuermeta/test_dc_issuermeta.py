@@ -9,10 +9,10 @@ import pytest
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "_helpers"))
 from dcsub_http import Reply, Server, redirect, routed_client  # noqa: E402
 
-from digitalcredential import issuermeta as im  # noqa: E402
-from digitalcredential.internal.safehttp import StatusError, as_, is_  # noqa: E402
-from digitalcredential.issuerkey import ErrIssuerNotSupported, ErrNoUsableKey  # noqa: E402
-from jose.errors import ErrInvalidArgument  # noqa: E402
+from pila_credential.digitalcredential import issuermeta as im  # noqa: E402
+from pila_credential.digitalcredential._internal.safehttp import StatusError, as_, is_  # noqa: E402
+from pila_credential.digitalcredential.issuerkey import ErrIssuerNotSupported, ErrNoUsableKey  # noqa: E402
+from pila_credential.jose.errors import ErrInvalidArgument  # noqa: E402
 
 FIG14 = """{
    "issuer":"https://example.com",
@@ -188,7 +188,7 @@ def test_new_resolver():
 
 
 def test_cache_budget():
-    from digitalcredential.issuermeta import cache as c
+    from pila_credential.digitalcredential.issuermeta import cache as c
 
     now = [T0]
     r = im.new_resolver(im.ResolverConfig(now=lambda: now[0]))
@@ -305,7 +305,7 @@ def test_key_walk():
     def ec(extra=""):
         return '{"kty":"EC","crv":"P-256","x":"%s","y":"%s"%s}' % (AX, AY, extra)
 
-    from jose import json as j
+    from pila_credential.jose import json as j
 
     def dec(s):
         return j.decode_json_object(s.encode())

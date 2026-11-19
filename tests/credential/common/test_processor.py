@@ -1,4 +1,4 @@
-from credential.common.processor import canonicalize_document, compute_document_digest
+from pila_credential.credential.common.processor import canonicalize_document, compute_document_digest
 
 
 def test_rdfc_digest() -> None:

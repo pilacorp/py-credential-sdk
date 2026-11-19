@@ -1,10 +1,10 @@
 import json
 
-from didv2.signer import DefaultProvider
-from didv2.did.did import marshal_did_document
-from didv2.subdid.document import doc_hash, sub_did_for
-from didv2.subdid.generate import generate_sub_did
-from didv2.model import DID_TYPE_PEOPLE
+from pila_credential.didv2.signer import DefaultProvider
+from pila_credential.didv2.did.did import marshal_did_document
+from pila_credential.didv2.subdid.document import doc_hash, sub_did_for
+from pila_credential.didv2.subdid.generate import generate_sub_did
+from pila_credential.didv2.model import DID_TYPE_PEOPLE
 
 ROOT_R1 = "did:nda:0x19e7e376e7c213b7e7e7e46cc70a5dd086daff2a"
 SUB_IDS1 = "0b8e6f3c-5a1d-4c27-9f40-3e2a7d91c6b5"

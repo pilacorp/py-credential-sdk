@@ -4,9 +4,9 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric import ec as cec, ed25519
 from eth_keys import keys as eth_keys
 
-from jose import ErrUnsupportedKey
-from jose.internal import ec
-from jose.internal.ec import Kind, Point, in_scalar_range
+from pila_credential.jose import ErrUnsupportedKey
+from pila_credential.jose.internal import ec
+from pila_credential.jose.internal.ec import Kind, Point, in_scalar_range
 from jose_helpers import N_P256
 
 

@@ -2,7 +2,7 @@
 
 from datetime import datetime, timedelta, timezone
 
-from digitalcredential import (
+from pila_credential.digitalcredential import (
     IssueRequest,
     KeyBinding,
     PresentRequest,
@@ -14,7 +14,7 @@ from digitalcredential import (
     with_audience,
     with_nonce,
 )
-from jose.jws import private_key_signer
+from pila_credential.jose.jws import private_key_signer
 
 from dc_helpers import new_key
 

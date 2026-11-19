@@ -1,4 +1,4 @@
-from didv2.subdid.key import derive_sub_did_key
+from pila_credential.didv2.subdid.key import derive_sub_did_key
 
 SUB_IDS1 = "0b8e6f3c-5a1d-4c27-9f40-3e2a7d91c6b5"
 
